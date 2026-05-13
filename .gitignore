@@ -279,4 +279,7 @@ documentacao-analise.docx
 DER.md
 scripts/
 
-backend/reports/*
+backend/reports/*.claude/
+.opencode/
+docs/
+.agents/skills/
