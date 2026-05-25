@@ -1,6 +1,7 @@
 """Transaction REST endpoints for web frontend."""
 
 from typing import Annotated, Any
+from datetime import date
 
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import Response
@@ -30,9 +31,11 @@ TransactionRestSvc = Annotated[TransactionRestService, Depends(get_transaction_r
 async def get_summary(
     current_user: CurrentUser,
     service: TransactionRestSvc,
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
 ) -> Any:
     """Get dashboard summary for the authenticated user."""
-    return await service.get_summary(current_user.id)
+    return await service.get_summary(current_user.id, date_from=date_from, date_to=date_to)
 
 
 @router.get("", response_model=TransactionListResponse)
@@ -43,6 +46,8 @@ async def list_transactions(
     limit: int = Query(50, ge=1, le=100),
     type: str | None = Query(None, pattern="^(EXPENSE|INCOME)$"),
     search: str | None = Query(None, min_length=1),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
 ) -> Any:
     """List transactions for the authenticated user."""
     return await service.list_for_user(
@@ -51,6 +56,8 @@ async def list_transactions(
         limit=limit,
         type_filter=type,
         search=search,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 

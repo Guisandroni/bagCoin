@@ -234,11 +234,11 @@ async def receive_telegram_message(
         logger.warning(f"Telegram webhook rejeitado — telefone inválido: {phone_number!r}")
         return TelegramResponse(reply=f"⚠️ {terr}", actions=[])
 
-    # 2. Busca ou cria PhoneUser para garantir que existe
+    # 2. Busca ou cria usuário unificado para garantir que existe
     try:
         get_or_create_user_sync(phone_number)
     except Exception as e:
-        logger.error(f"Erro ao buscar/criar PhoneUser para {phone_number}: {e}")
+        logger.error(f"Erro ao buscar/criar usuário para {phone_number}: {e}")
         return TelegramResponse(
             reply="Erro ao identificar usuário. Tente novamente.",
             actions=[],

@@ -3,7 +3,6 @@
 import secrets
 from datetime import UTC, datetime
 from typing import Annotated, Any
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -15,12 +14,17 @@ from app.schemas.auth import (
     AuthPendingResponse,
     EmailVerificationRequest,
     EmailVerificationResponse,
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     ResendVerificationRequest,
     ResendVerificationResponse,
+    ResetPasswordRequest,
+    ResetPasswordResponse,
 )
 from app.schemas.token import RefreshTokenRequest, Token
 from app.schemas.user import GoogleLoginRequest, UserCreate, UserRead
 from app.services.email_verification import EmailVerificationService
+from app.services.password_reset import PasswordResetService
 
 router = APIRouter()
 
@@ -81,7 +85,7 @@ async def refresh_token(
     user_id = payload.get("sub")
     if user_id is None:
         raise AuthenticationError(message="Conteúdo do token inválido")
-    user = await user_service.get_by_id(UUID(user_id))
+    user = await user_service.get_by_id(int(user_id))
     if not user.is_active:
         raise AuthenticationError(message="Sua conta está desativada")
     return _make_token(str(user.id))
@@ -155,6 +159,29 @@ async def resend_verification(
         body.email,
         ip_address=_client_ip(request),
     )
+
+
+@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+async def forgot_password(
+    body: ForgotPasswordRequest,
+    request: Request,
+    user_service: UserSvc,
+    redis: Redis,
+) -> Any:
+    reset_service = PasswordResetService(user_service.db, redis)
+    await reset_service.request_reset(body.email, ip_address=_client_ip(request))
+    return ForgotPasswordResponse()
+
+
+@router.post("/reset-password", response_model=ResetPasswordResponse)
+async def reset_password(
+    body: ResetPasswordRequest,
+    user_service: UserSvc,
+    redis: Redis,
+) -> Any:
+    reset_service = PasswordResetService(user_service.db, redis)
+    await reset_service.reset_password(body.token, body.password)
+    return ResetPasswordResponse()
 
 
 @router.get("/me", response_model=UserRead)
