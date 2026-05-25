@@ -37,6 +37,7 @@ from app.agents.persistence import save_message_to_history, save_transaction
 from app.agents.pending_actions import (
     handle_pending_confirmation,
     has_pending_confirmation_message,
+    save_pending_action,
 )
 from app.agents.recommendations import generate_recommendations
 from app.agents.reports import generate_report
@@ -138,6 +139,44 @@ def document_agent_node(state: AgentState) -> AgentState:
     except Exception as exc:
         logger.exception("[document_agent] failed")
         result["error"] = f"Erro ao analisar documento: {exc}"
+    return AgentState(**result)
+
+
+def receipt_confirm_node(state: AgentState) -> AgentState:
+    """Cria confirmação para recibo/nota fiscal extraído de imagem."""
+    from app.agents.pending_actions import save_pending_action
+    from app.agents.tools.documents import (
+        _build_receipt_transaction_confirmation,
+        _handle_receipt_structured,
+        _receipt_transaction_type,
+    )
+
+    result = dict(state)
+    ctx = state.get("context") or {}
+    channel = str(ctx.get("channel") or "whatsapp")
+    if channel not in ("whatsapp", "telegram"):
+        channel = "whatsapp"
+    structured = ctx.get("image_structured") or {}
+
+    if structured.get("needs_type_confirmation"):
+        result["response"] = _handle_receipt_structured(
+            structured,
+            state["phone_number"],
+            channel,
+        )
+        return AgentState(**result)
+
+    tx_type = _receipt_transaction_type(structured) or "EXPENSE"
+    tx_params, summary = _build_receipt_transaction_confirmation(structured, tx_type)
+    tx_params = {**tx_params, "source_format": "image"}
+
+    result["response"] = save_pending_action(
+        state["phone_number"],
+        action="register_transaction",
+        params=tx_params,
+        summary=summary,
+        channel=channel,
+    )
     return AgentState(**result)
 
 
@@ -325,6 +364,50 @@ def _is_account_or_card_request(msg_norm: str) -> bool:
     return any(term in msg_norm for term in account_terms) or any(
         term in msg_norm for term in card_terms
     )
+
+
+def _is_budget_create_request(msg_norm: str) -> bool:
+    budget_terms = ("orcamento", "orcamentos", "limite mensal", "limite por categoria")
+    create_terms = ("criar", "crie", "novo", "nova", "definir", "defina", "adicionar")
+    if any(term in msg_norm for term in budget_terms):
+        return True
+    return any(term in msg_norm for term in create_terms) and "limite" in msg_norm
+
+
+def _extract_budget_request(message: str) -> dict[str, Any] | None:
+    amount_match = re.search(
+        r"(?:r\$?\s*)?(\d{1,3}(?:[.,]\d{3})*[.,]\d{1,2}|\d+(?:[.,]\d{1,2})?)",
+        message,
+        flags=re.IGNORECASE,
+    )
+    if not amount_match:
+        return None
+    raw_amount = amount_match.group(1)
+    normalized_amount = raw_amount.replace(".", "").replace(",", ".")
+    try:
+        total_limit = float(normalized_amount)
+    except ValueError:
+        return None
+
+    category_text = message[: amount_match.start()] + " " + message[amount_match.end() :]
+    category_text = _msg_norm(category_text)
+    category_text = re.sub(
+        r"\b(criar|crie|quero|novo|nova|definir|defina|adicionar|um|uma|de|do|da|para|pra|em|na|no|categoria|orcamento|orcamentos|limite|mensal|mes|por|r)\b",
+        " ",
+        category_text,
+    )
+    category_text = re.sub(r"\s+", " ", category_text).strip(" .,!?\n\t")
+    if not category_text:
+        return None
+
+    from app.core.financial_categories import resolve_default_category_name
+
+    return {
+        "name": resolve_default_category_name(category_text),
+        "total_limit": total_limit,
+        "period": "monthly",
+        "budget_type": "category",
+    }
 
 
 def _format_recent_transaction_for_prompt(tx: Any) -> str:
@@ -746,7 +829,7 @@ def chat_node(state: AgentState) -> AgentState:
                 "• **Consultar** seus dados financeiros\n"
                 "• **Orçamentos** por categoria\n"
                 "• **Metas** financeiras\n"
-                "• **Relatórios** em PDF\n"
+                "• **Exportação CSV** pelo Dashboard\n"
                 "• **Importar** extratos bancários\n"
                 "• **Dicas** de economia\n\n"
                 "Manda **'ajuda'** pra ver exemplos de como usar cada função!"
@@ -757,7 +840,7 @@ def chat_node(state: AgentState) -> AgentState:
             "Não entendi muito bem. Posso ajudar com:\n"
             "- Registrar gastos e receitas\n"
             "- Consultar seus dados\n"
-            "- Gerar relatórios\n"
+            "- Exportar CSV pelo Dashboard\n"
             "- Criar orçamentos e metas\n\n"
             "Manda 'ajuda' para ver exemplos ou me faça uma pergunta!"
         )
@@ -1044,9 +1127,9 @@ Responda APENAS JSON:
 
 
 def _tool_history(phone_number: str, limit: int = 6) -> str:
-    from app.agents.persistence import get_conversation_history
+    from app.services.agent_memory_service import build_agent_context_text
 
-    return get_conversation_history(phone_number, limit=limit) or ""
+    return build_agent_context_text(phone_number, message_limit=limit) or ""
 
 
 def register_agent_node(state: AgentState) -> AgentState:
@@ -1154,6 +1237,31 @@ def smart_manage_tool_node(state: AgentState) -> AgentState:
         )
         return state
 
+    from app.agents.wizard import _load_wizard_state
+
+    wizard = _load_wizard_state(phone_number)
+    if wizard and wizard.get("status") in ["collecting", "confirming"]:
+        return wizard_handler_node(state)
+
+    if _is_budget_create_request(msg_norm):
+        budget_params = _extract_budget_request(message)
+        if budget_params:
+            state["response"] = save_pending_action(
+                phone_number,
+                action="create_budget",
+                params=budget_params,
+                summary=resp.budget_confirmation(
+                    budget_params["name"],
+                    float(budget_params["total_limit"]),
+                    "monthly",
+                ),
+                channel=str((state.get("context") or {}).get("channel") or "whatsapp"),
+            )
+            return state
+        wizard_state = dict(state)
+        wizard_state["intent"] = IntentType.CREATE_BUDGET.value
+        return wizard_handler_node(AgentState(**wizard_state))
+
     llm = get_llm(temperature=0.1)
     if not llm:
         state["response"] = (
@@ -1176,9 +1284,11 @@ Objetivo: interpretar o que o usuario quer gerenciar e chamar a tool correta.
 Regras:
 - Use tools para orcamentos, metas, categorias, correcoes e exclusoes.
 - Toda criacao, edicao ou exclusao deve ser preparada para confirmacao pela tool.
-- Se faltar informacao, pergunte apenas o dado necessario.
+- Metas tambem devem ser sempre preparadas pela tool; nunca responda como se a meta ja tivesse sido salva antes da confirmacao.
+- Orcamento precisa apenas de categoria e valor. Nunca peca descricao para orcamento.
+- Se o usuario disser so "criar orcamento", peca categoria e valor em uma frase.
 - Nao crie contas bancarias, saldos ou cartoes de credito.
-- Orcamentos sao sempre por categoria.
+- Orcamentos sao sempre por categoria, mensais, a cada 30 dias.
 - Para consultas simples de categorias/metas/orcamentos, pode listar direto.
 - Quando uma tool retornar dados reais, nao invente estado diferente do resultado da tool.
 - Responda em portugues, breve e natural para WhatsApp."""
@@ -1240,8 +1350,9 @@ def build_response_node(state: AgentState) -> AgentState:
         amount = extracted.get("amount", 0)
         category = state.get("category_name", extracted.get("category", "Outros"))
         desc = extracted.get("description", "")
+        tx_date = state.get("transaction_date") or extracted.get("date") or extracted.get("transaction_date")
 
-        state["response"] = resp.transaction_registered(tx_type, amount, category, desc)
+        state["response"] = resp.transaction_registered(tx_type, amount, category, desc, tx_date)
 
         alerts = state.get("alerts", [])
         if alerts:
@@ -1417,6 +1528,20 @@ def route_after_multimodal(state: AgentState) -> str:
     ):
         return "pending_confirmation"
     original_format = (state.get("context") or {}).get("original_format")
+    # Imagem de recibo com extração estruturada → registrar como transação única
+    image_structured = (state.get("context") or {}).get("image_structured")
+    if isinstance(image_structured, dict):
+        from app.agents.document_understanding import _normalize_receipt_payload
+
+        image_structured = _normalize_receipt_payload(image_structured)
+    if (
+        original_format == "image"
+        and image_structured
+        and image_structured.get("is_receipt")
+        and (image_structured.get("total_amount") or image_structured.get("items"))
+    ):
+        logger.info("Recibo identificado na imagem. Criando confirmação de registro.")
+        return "receipt_confirm"
     if settings.USE_TOOL_AGENTS and original_format in {"document", "image"}:
         logger.info("Mídia financeira será analisada pela tool de documentos.")
         return "document_agent"
@@ -1513,6 +1638,7 @@ def create_orchestrator():
     workflow.add_node("classify_intent", classify_intent_node)
     workflow.add_node("register_agent", register_agent_node)
     workflow.add_node("document_agent", document_agent_node)
+    workflow.add_node("receipt_confirm", receipt_confirm_node)
     workflow.add_node("extract_data", extract_data_node)
     workflow.add_node("save_transaction", save_transaction_node)
     workflow.add_node("check_alerts", alerts_node)
@@ -1555,6 +1681,7 @@ def create_orchestrator():
         {
             "classify_intent": "classify_intent",
             "pending_confirmation": "pending_confirmation",
+            "receipt_confirm": "receipt_confirm",
             "document_agent": "document_agent",
             "import_statement": "import_statement",
             "build_response": "build_response",
@@ -1599,6 +1726,7 @@ def create_orchestrator():
 
     workflow.add_edge("pending_confirmation", "build_response")
     workflow.add_edge("register_agent", "build_response")
+    workflow.add_edge("receipt_confirm", "build_response")
     workflow.add_edge("document_agent", "build_response")
     workflow.add_edge("extract_data", "save_transaction")
     workflow.add_edge("save_transaction", "check_alerts")

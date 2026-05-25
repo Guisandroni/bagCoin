@@ -35,6 +35,46 @@ def _normalize(text: str) -> str:
     return unicodedata.normalize("NFKD", text.lower()).encode("ASCII", "ignore").decode("ASCII")
 
 
+def _looks_like_report_summary_request(msg_norm: str) -> bool:
+    """Detect broad financial summary requests that should generate a PDF report."""
+    if not msg_norm:
+        return False
+
+    concept_markers = ("o que e", "como funciona", "pra que serve", "para que serve")
+    if any(marker in msg_norm for marker in concept_markers):
+        return False
+
+    specific_query_markers = (
+        "meta",
+        "metas",
+        "orcamento",
+        "orcamentos",
+        "categoria",
+        "categorias",
+        "transacao",
+        "transacoes",
+    )
+    if any(marker in msg_norm for marker in specific_query_markers):
+        return False
+
+    report_markers = (
+        "quanto ja gastei",
+        "quanto gastei",
+        "como estao minhas despesas",
+        "como estao meus gastos",
+        "como estao minhas receitas",
+        "resumo das minhas financas",
+        "resumo financeiro",
+        "resumo do mes",
+        "balanco",
+        "qual meu saldo",
+        "minhas despesas",
+        "meus gastos",
+        "minhas receitas",
+    )
+    return any(marker in msg_norm for marker in report_markers)
+
+
 def _enrich_system_prompt(phone_number: str) -> str:
     from app.agents.prompts.classify_intent import build_classify_prompt
 
@@ -99,6 +139,17 @@ def classify_intent(state: dict[str, Any]) -> dict[str, Any]:
         )
         elapsed = (time.time() - start_time) * 1000
         logger.info(f"[classify_intent] Fast-path: just number → chat ({elapsed:.0f}ms)")
+        return state
+
+    # =====================================================================
+    # FAST-PATH 3: broad financial summary → PDF report
+    # =====================================================================
+    if _looks_like_report_summary_request(msg_norm):
+        state["intent"] = IntentType.GENERATE_REPORT.value
+        state["macro_intent"] = "report"
+        state["confidence"] = 1.0
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"[classify_intent] Fast-path: summary report ({elapsed:.0f}ms)")
         return state
 
     # =====================================================================

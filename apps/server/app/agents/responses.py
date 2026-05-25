@@ -6,7 +6,6 @@ Principles:
 - WhatsApp-friendly formatting
 """
 
-import random
 from datetime import date, datetime
 from typing import Any
 
@@ -26,31 +25,57 @@ _MONTHS_PT = (
     "dezembro",
 )
 
-_EXPENSE_CONFIRMATIONS = (
-    "Anotado. R$ {amount:,.2f} em {category}{desc_part}.",
-    "Gasto registrado: R$ {amount:,.2f} em {category}{desc_part}.",
-    "Pronto, registrei R$ {amount:,.2f} em {category}{desc_part}.",
-)
-
-_INCOME_CONFIRMATIONS = (
-    "Receita registrada: R$ {amount:,.2f} em {category}{desc_part}.",
-    "Anotado. Entraram R$ {amount:,.2f} em {category}{desc_part}.",
-    "Pronto, registrei a receita de R$ {amount:,.2f} em {category}{desc_part}.",
-)
-
-
 def _fmt_date(raw) -> str:
-    """Format date/time to short Brazilian format."""
+    """Format date/time to Brazilian day/month/year format."""
     if isinstance(raw, datetime):
-        return raw.strftime("%d/%m")
+        return raw.strftime("%d/%m/%Y")
+    if isinstance(raw, date):
+        return raw.strftime("%d/%m/%Y")
     if isinstance(raw, str):
+        value = raw.strip()
+        if not value:
+            return ""
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return dt.strftime("%d/%m/%Y")
+        except ValueError:
+            pass
         for fmt in ["%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y"]:
             try:
-                dt = datetime.strptime(raw.split(".")[0], fmt.split(".")[0])
-                return dt.strftime("%d/%m")
+                dt = datetime.strptime(value.split(".")[0], fmt.split(".")[0])
+                return dt.strftime("%d/%m/%Y")
             except ValueError:
                 continue
     return str(raw) if raw else ""
+
+
+def _fmt_money(value: Any) -> str:
+    """Format money in pt-BR without depending on system locale."""
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        amount = 0.0
+    formatted = f"{amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {formatted}"
+
+
+def _success_date(raw: Any) -> str:
+    return _fmt_date(raw) or datetime.now().strftime("%d/%m/%Y")
+
+
+def _transaction_sentence(row: dict[str, Any]) -> str:
+    amount = row.get("amount") or row.get("valor") or row.get("total") or 0
+    category = row.get("category") or row.get("categoria") or row.get("category_name") or "Outros"
+    description = (
+        row.get("description")
+        or row.get("descricao")
+        or row.get("name")
+        or row.get("nome")
+        or ""
+    )
+    date_val = row.get("transaction_date") or row.get("date") or row.get("data")
+    desc_part = f" ({description})" if description else ""
+    return f"Valor: {_fmt_money(amount)} em {category}{desc_part} no dia {_success_date(date_val)}."
 
 
 def _fmt_deadline(raw) -> str:
@@ -97,7 +122,7 @@ def greeting(name: str | None = None, greeting_time: str | None = None) -> str:
     return (
         f"{prefix}! Sou o BagCoin, seu assistente financeiro.\n\n"
         "Posso ajudar você a:\n"
-        "- Registrar gastos e receitas\n"
+        "- Registrar despesas e receitas\n"
         "- Consultar suas transações realizadas\n"
         "- Gerar relatórios em PDF\n"
         "- Definir orçamentos por categoria e metas\n\n"
@@ -108,7 +133,7 @@ def greeting(name: str | None = None, greeting_time: str | None = None) -> str:
 def help_menu() -> str:
     return (
         "Como usar o BagCoin:\n\n"
-        " Voce pode registrar um gasto:\n"
+        " Voce pode registrar uma despesa:\n"
         "• Gastei R$ 35 no almoço\n"
         "• Mercado 240\n"
         "• Uber 30\n\n"
@@ -117,7 +142,7 @@ def help_menu() -> str:
         "• Meu pai me mandou 170\n\n"
         " Voce pode consultar suas transações realizadas:\n"
         "• Quanto gastei hoje?\n"
-        "• Gastos por categoria\n"
+        "• Despesas por categoria\n"
         "• Qual meu saldo?\n\n"
         " Voce pode definir orçamentos por categoria:\n"
         "• Crie um orçamento de R$ 3000 para a categoria alimentação\n"
@@ -132,15 +157,88 @@ def help_menu() -> str:
     )
 
 
-def transaction_registered(tx_type: str, amount: float, category: str, description: str) -> str:
-    desc_part = f" ({description})" if description else ""
-    if tx_type == "EXPENSE":
-        template = random.choice(_EXPENSE_CONFIRMATIONS)
-    elif tx_type == "INCOME":
-        template = random.choice(_INCOME_CONFIRMATIONS)
-    else:
-        template = "Transação registrada: R$ {amount:,.2f} em {category}{desc_part}."
-    return template.format(amount=amount, category=category, desc_part=desc_part)
+def transaction_confirmation(
+    tx_type: str,
+    amount: float,
+    category: str,
+    description: str,
+    transaction_date: Any = None,
+) -> str:
+    """Return the fixed confirmation prompt for a pending transaction."""
+    prefix = "💰 Receita" if str(tx_type).upper() == "INCOME" else "🧾 Despesa"
+    clean_category = (category or "Outros").strip() or "Outros"
+    clean_description = (description or "Sem descrição").strip() or "Sem descrição"
+    return (
+        f"{prefix}: {_fmt_money(amount)} em {clean_category} ({clean_description}) "
+        f"no dia {_success_date(transaction_date)}.\n\n"
+        "Confirma esta transação?\n"
+        "Se algo estiver errado, me diga o ajuste. Ex: \"valor era 200\"."
+    )
+
+
+def transaction_registered(
+    tx_type: str,
+    amount: float,
+    category: str,
+    description: str,
+    transaction_date: Any = None,
+) -> str:
+    """Return the short success message after a transaction is saved."""
+    _ = (tx_type, amount, category, description, transaction_date)
+    return "✅ Transação registrada com sucesso!"
+
+
+def document_imported(
+    transactions: list[dict[str, Any]],
+    skipped: int = 0,
+    errors: list[str] | None = None,
+    *,
+    label: str = "Documento",
+) -> str:
+    """Return a user-facing import confirmation based on persisted rows."""
+    errors = errors or []
+    imported = len(transactions)
+    prefix = f"{label} importado com sucesso!"
+
+    suffix_parts = []
+    if skipped:
+        plural = "s" if skipped != 1 else ""
+        suffix_parts.append(f"{skipped} duplicata{plural} ignorada{plural}.")
+    if errors:
+        error_count = len(errors)
+        plural = "s" if error_count != 1 else ""
+        minor_suffix = "es" if error_count != 1 else ""
+        suffix_parts.append(f"{error_count} erro{plural} menor{minor_suffix} ignorado{plural}.")
+    suffix = f" {' '.join(suffix_parts)}" if suffix_parts else ""
+
+    if imported == 0:
+        if skipped:
+            return (
+                f"📄 {label} processado.\n\n"
+                "🔁 Nenhuma transação nova foi importada.\n"
+                "As transações encontradas já estavam duplicadas e foram ignoradas."
+            )
+        return f"📄 {label} processado.\n\nNenhuma transação nova foi importada."
+
+    if imported == 1:
+        return f"{prefix} {_transaction_sentence(transactions[0])} ✅{suffix}"
+
+    lines = [f"{prefix} {imported} transações importadas:"]
+    for index, tx in enumerate(transactions, 1):
+        lines.append(f"{index}. {_transaction_sentence(tx)}")
+    if suffix_parts:
+        lines.append(" ".join(suffix_parts))
+    lines.append("✅")
+    return "\n".join(lines)
+
+
+def non_financial_media(kind: str = "imagem") -> str:
+    label = "imagem" if kind == "image" else "documento" if kind == "document" else kind
+    return (
+        f"🖼️ Não consegui processar essa {label}.\n\n"
+        "Ela não parece conter uma nota fiscal, recibo, comprovante ou documento financeiro aceito.\n"
+        "Envie uma imagem financeira ou descreva a transação em texto."
+    )
 
 
 def query_summary(summary: str) -> str:
@@ -169,12 +267,32 @@ def budget_created(name: str, limit: float, period: str, updated: bool = False) 
     )
 
 
+def budget_confirmation(
+    name: str,
+    limit: float,
+    period: str = "monthly",
+    created_at: Any = None,
+) -> str:
+    """Return the fixed confirmation prompt for a pending budget."""
+    clean_name = (name or "Outros").strip() or "Outros"
+    cadence = "a cada 30 dias" if period == "monthly" else f"no periodo {period_label(period)}"
+    return (
+        f"📊 Orçamento de {_fmt_money(limit)} na categoria {clean_name} "
+        f"{cadence} no dia {_success_date(created_at)}.\n\n"
+        "Confirma?"
+    )
+
+
+def budget_saved_success() -> str:
+    return "✅ Orçamento criado com sucesso!"
+
+
 def budget_list(budgets: list[dict[str, Any]]) -> str:
     if not budgets:
         return (
             "Você ainda não tem orçamentos ativos.\n\n"
-            "Orçamentos são limites de gasto por categoria (ex: R$ 500/mês em Alimentação). "
-            "Quando você registra um gasto na categoria, eu descontato do orçamento e aviso "
+            "Orçamentos são limites de despesa por categoria (ex: R$ 500/mês em Alimentação). "
+            "Quando você registra uma despesa na categoria, eu descontato do orçamento e aviso "
             "quando chega em 80% e 100% do limite.\n\n"
             "Para criar: 'Orçamento de R$ 500 para alimentação'."
         )
@@ -222,6 +340,69 @@ def goal_created(title: str, target: float, deadline: str | None = None) -> str:
     )
 
 
+def goal_confirmation(title: str, target: float, deadline: Any = None) -> str:
+    clean_title = (title or "Reserva").strip() or "Reserva"
+    deadline_label = _fmt_deadline(deadline)
+    deadline_part = f" até {deadline_label}" if deadline_label else ""
+    return f"🎯 Meta de {_fmt_money(target)} para {clean_title}{deadline_part}.\n\nConfirma?"
+
+
+def goal_saved_success() -> str:
+    return "✅ Meta criada com sucesso!"
+
+
+def goal_contribution_confirmation(goal_identifier: str, amount: float) -> str:
+    clean_identifier = (goal_identifier or "sua meta").strip() or "sua meta"
+    return f"🎯 Adicionar {_fmt_money(amount)} na meta {clean_identifier}.\n\nConfirma?"
+
+
+def goal_contribution_success(
+    title: str,
+    current_amount: float,
+    target_amount: float,
+    percentage: Any = 0,
+) -> str:
+    clean_title = (title or "Meta").strip() or "Meta"
+    return (
+        "✅ Valor adicionado à meta!\n\n"
+        f"{clean_title}: {_fmt_money(current_amount)} / {_fmt_money(target_amount)} ({percentage}%)."
+    )
+
+
+def goal_update_confirmation(
+    goal_identifier: str,
+    title: str | None = None,
+    target_amount: float | None = None,
+    deadline: Any = None,
+) -> str:
+    clean_identifier = (goal_identifier or "sua meta").strip() or "sua meta"
+    changes = []
+    if title:
+        changes.append(f"nome para {title}")
+    if target_amount is not None:
+        changes.append(f"valor para {_fmt_money(target_amount)}")
+    deadline_label = _fmt_deadline(deadline)
+    if deadline_label:
+        changes.append(f"prazo para {deadline_label}")
+    change_text = f"\n\nAlterações: {', '.join(changes)}." if changes else ""
+    return f"🎯 Atualizar meta {clean_identifier}.{change_text}\n\nConfirma?"
+
+
+def goal_update_success(title: str, target_amount: float, deadline: Any = None) -> str:
+    deadline_label = _fmt_deadline(deadline)
+    deadline_part = f" Prazo: {deadline_label}." if deadline_label else ""
+    return f"✅ Meta atualizada com sucesso! {title}: {_fmt_money(target_amount)}.{deadline_part}".strip()
+
+
+def goal_delete_confirmation(goal_identifier: str) -> str:
+    clean_identifier = (goal_identifier or "sua meta").strip() or "sua meta"
+    return f"🗑️ Remover meta {clean_identifier}.\n\nConfirma?"
+
+
+def goal_delete_success() -> str:
+    return "✅ Meta removida com sucesso!"
+
+
 def alerts_list(alerts: list[dict[str, Any]]) -> str:
     if not alerts:
         return "Nenhum alerta no momento. Seus orçamentos e metas estão dentro do previsto."
@@ -255,8 +436,8 @@ def transaction_list(rows: list[dict[str, Any]], title: str = "Transações") ->
 def category_list(rows: list[dict[str, Any]]) -> str:
     """Format expense-by-category list."""
     if not rows:
-        return "Nenhum gasto encontrado no período."
-    lines = ["Gastos por categoria:"]
+        return "Nenhuma despesa encontrada no período."
+    lines = ["Despesas por categoria:"]
     for row in rows:
         cat = row.get("categoria") or row.get("category") or row.get("name") or "Outros"
         total = row.get("total") or row.get("amount") or row.get("sum") or 0
@@ -279,7 +460,7 @@ def import_result(imported: int, skipped: int, errors: list[str]) -> str:
 def unknown_intent() -> str:
     return (
         "Não entendi muito bem. Posso ajudar com:\n"
-        "- Registrar gastos e receitas\n"
+        "- Registrar despesas e receitas\n"
         "- Consultar seus dados\n"
         "- Gerar relatórios\n"
         "- Dar dicas financeiras\n\n"
