@@ -10,7 +10,10 @@ from langchain_core.tools import BaseTool, tool
 from sqlalchemy import func
 
 from app.agents import responses as resp
-from app.agents.persistence import get_or_create_user, get_user_transactions
+from app.agents.persistence import (
+    get_or_create_user,
+    get_user_transactions,
+)
 from app.db.models.category import Category
 from app.db.models.transaction import Transaction
 from app.db.session import sync_session_maker
@@ -123,7 +126,7 @@ def create_query_tools(phone_number: str) -> list[BaseTool]:
             return (
                 "CSV gerado abaixo:\n\n"
                 f"```csv\n{buffer.getvalue().strip()}\n```\n\n"
-                "Se preferir, também posso orientar a exportação direta pela web em /app/relatorios."
+                "Se preferir, também posso orientar a exportação direta pela web no Dashboard."
             )
         finally:
             db.close()

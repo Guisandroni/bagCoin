@@ -17,12 +17,11 @@ def create_goal_tools(phone_number: str, context: dict | None = None) -> list[Ba
         """Prepare a financial goal for confirmation before creating it."""
         if target_amount <= 0:
             return "Qual e o valor alvo da meta?"
-        deadline_part = f" com prazo {deadline}" if deadline else ""
         return save_pending_action(
             phone_number,
             action="create_goal",
             params={"title": title, "target_amount": float(target_amount), "deadline": deadline},
-            summary=f"Vou criar meta {title} de R$ {float(target_amount):,.2f}{deadline_part}.",
+            summary=resp.goal_confirmation(title, float(target_amount), deadline),
             channel=channel,
         )
 
@@ -40,7 +39,7 @@ def create_goal_tools(phone_number: str, context: dict | None = None) -> list[Ba
             phone_number,
             action="contribute_goal",
             params={"goal_identifier": goal_identifier, "amount": float(amount)},
-            summary=f"Vou adicionar R$ {float(amount):,.2f} na meta {goal_identifier}.",
+            summary=resp.goal_contribution_confirmation(goal_identifier, float(amount)),
             channel=channel,
         )
 
@@ -63,7 +62,12 @@ def create_goal_tools(phone_number: str, context: dict | None = None) -> list[Ba
                 "target_amount": target_amount,
                 "deadline": deadline,
             },
-            summary=f"Vou atualizar a meta {goal_identifier}.",
+            summary=resp.goal_update_confirmation(
+                goal_identifier,
+                title=title,
+                target_amount=target_amount,
+                deadline=deadline,
+            ),
             channel=channel,
         )
 
@@ -74,7 +78,7 @@ def create_goal_tools(phone_number: str, context: dict | None = None) -> list[Ba
             phone_number,
             action="delete_goal",
             params={"goal_identifier": goal_identifier},
-            summary=f"Vou remover a meta {goal_identifier}.",
+            summary=resp.goal_delete_confirmation(goal_identifier),
             channel=channel,
         )
 
