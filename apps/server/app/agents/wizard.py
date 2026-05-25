@@ -12,6 +12,7 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from app.agents import responses as resp
 from app.agents.persistence import get_or_create_user
 from app.db.models.phone_conversation import PhoneConversation
 from app.db.session import sync_session_maker
@@ -449,6 +450,15 @@ def _handle_collecting(
             "update_goal": "atualização de meta",
             "contribute_goal": "contribuição para meta",
         }.get(wizard_type, wizard_type.replace("_", " "))
+        if wizard_type == "create_budget":
+            state["response"] = (
+                "Para criar um orçamento, me envie a categoria e o valor.\n\n"
+                'Ex: "alimentação 4000" ou "orçamento 4000 alimentação".'
+            )
+            wizard["updated_at"] = datetime.now(UTC).isoformat()
+            _save_wizard_state(phone_number, wizard)
+            return state
+
         response = f"Vamos criar seu {type_name}!\n\nPreciso das seguintes informações:\n"
         for i, label in enumerate(missing_labels, 1):
             response += f"{i}. {label}\n"
@@ -493,7 +503,7 @@ def _handle_collecting(
                 return state
             # Todos os campos coletados
             wizard["status"] = "confirming"
-            return _handle_confirming(state, wizard, message, phone_number, llm)
+            return _prompt_for_confirmation(state, wizard, phone_number)
         else:
             # Resposta inválida — re-prompt com a pergunta de opções
             state["response"] = _build_option_prompt(field, field_opt_labels, is_retry=True)
@@ -552,7 +562,23 @@ def _handle_collecting(
 
     # Todos os campos coletados - vai para confirmação
     wizard["status"] = "confirming"
-    return _handle_confirming(state, wizard, message, phone_number, llm)
+    return _prompt_for_confirmation(state, wizard, phone_number)
+
+
+def _prompt_for_confirmation(
+    state: dict[str, Any], wizard: dict[str, Any], phone_number: str
+) -> dict[str, Any]:
+    """Show confirmation without treating the current data message as approval."""
+    summary = _format_confirmation(wizard)
+    if wizard["type"] in {"create_budget", "create_goal", "update_goal", "contribute_goal"}:
+        state["response"] = summary
+    else:
+        state["response"] = (
+            f"{summary}\n\nConfirma?\nResponda 'sim' para criar ou me diga o que quer alterar."
+        )
+    wizard["updated_at"] = datetime.now(UTC).isoformat()
+    _save_wizard_state(phone_number, wizard)
+    return state
 
 
 def _handle_confirming(
@@ -602,9 +628,12 @@ def _handle_confirming(
 
     # Resumo para confirmação
     summary = _format_confirmation(wizard)
-    state["response"] = (
-        f"{summary}\n\nConfirma?\nResponda 'sim' para criar ou me diga o que quer alterar."
-    )
+    if wizard_type == "create_budget":
+        state["response"] = summary
+    else:
+        state["response"] = (
+            f"{summary}\n\nConfirma?\nResponda 'sim' para criar ou me diga o que quer alterar."
+        )
     wizard["updated_at"] = datetime.now(UTC).isoformat()
     _save_wizard_state(phone_number, wizard)
     return state
@@ -648,16 +677,7 @@ def _handle_executing(
                 budget_type="category",
             )
             state["budget_data"] = budget
-            from app.agents import responses as resp
-
-            budget_label = "Conta" if budget.get("budget_type") == "general" else "Orçamento"
-            verb = "criada" if budget_label == "Conta" else "criado"
-            state["response"] = (
-                f"{budget_label} {verb}! 📊\n\n"
-                f"{'Nome' if budget_label == 'Conta' else 'Categoria'}: {budget['name']}\n"
-                f"{'Saldo' if budget_label == 'Conta' else 'Limite'}: R$ {budget['total_limit']:,.2f}\n"
-                f"Período: {budget['period']}"
-            )
+            state["response"] = resp.budget_saved_success()
 
         elif wizard_type == "create_goal":
             from app.services.budget_service import create_goal
@@ -679,11 +699,7 @@ def _handle_executing(
                 deadline=deadline,
             )
             state["goal_data"] = goal
-            from app.agents import responses as resp
-
-            state["response"] = resp.goal_created(
-                goal["title"], goal["target_amount"], goal.get("deadline")
-            )
+            state["response"] = resp.goal_saved_success()
 
         elif wizard_type in ("update_goal", "contribute_goal"):
             from app.services.budget_service import get_goals, update_goal_progress
@@ -695,12 +711,11 @@ def _handle_executing(
 
             if target_goal and amount:
                 result = update_goal_progress(phone_number, target_goal["id"], amount)
-                action = "atualizada" if wizard_type == "update_goal" else "registrada"
-                state["response"] = (
-                    f"Meta {action}!\n\n"
-                    f"Meta: {result['title']}\n"
-                    f"Adicionado: R$ {amount:,.2f}\n"
-                    f"Progresso: R$ {result['current_amount']:,.2f} / R$ {result['target_amount']:,.2f} ({result['percentage']}%)"
+                state["response"] = resp.goal_contribution_success(
+                    result["title"],
+                    float(result["current_amount"]),
+                    float(result["target_amount"]),
+                    result["percentage"],
                 )
             else:
                 goals_list = "\n".join(
@@ -869,32 +884,18 @@ def _format_confirmation(wizard: dict) -> str:
         name = collected.get("name", "")
         limit = collected.get("total_limit", 0)
         period = collected.get("period", "monthly")
-        budget_type = collected.get("budget_type", "category")
-        type_label = "Conta/Saldo" if budget_type == "general" else "Limite por Categoria"
-        value_label = "Saldo" if budget_type == "general" else "Limite"
-        name_label = "Nome" if budget_type == "general" else "Categoria"
-        return (
-            f"Resumo do Orçamento:\n\n"
-            f"Tipo: {type_label}\n"
-            f"{name_label}: {name}\n"
-            f"{value_label}: R$ {float(limit):,.2f}\n"
-            f"Período: {_period_label(period)}"
-        )
+        return resp.budget_confirmation(str(name), float(limit), str(period or "monthly"))
 
     elif wizard_type == "create_goal":
         title = collected.get("title", "")
         target = collected.get("target_amount", 0)
         deadline = collected.get("deadline", "")
-        deadline_text = f"\nPrazo: {deadline}" if deadline else ""
-        return (
-            f"Resumo da Meta:\n\nObjetivo: {title}\nValor: R$ {float(target):,.2f}{deadline_text}"
-        )
+        return resp.goal_confirmation(str(title), float(target), deadline)
 
     elif wizard_type in ("update_goal", "contribute_goal"):
         identifier = collected.get("goal_identifier", "")
         amount = collected.get("amount", 0)
-        label = "Atualizar Meta" if wizard_type == "update_goal" else "Contribuir para Meta"
-        return f"{label}:\n\nMeta: {identifier}\nAdicionar: R$ {float(amount):,.2f}"
+        return resp.goal_contribution_confirmation(str(identifier), float(amount))
 
     return ""
 

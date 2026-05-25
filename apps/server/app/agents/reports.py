@@ -4,85 +4,104 @@ Uses sync_session_maker for database access.
 """
 
 import logging
-from datetime import datetime, UTC, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from app.agents.persistence import get_or_create_user
+from app.agents.text_to_sql import fetch_financial_transactions_for_query, resolve_financial_query_period
 from app.db.models.budget import Budget
 from app.db.models.enums import GoalStatus
 from app.db.models.goal import Goal
-from app.db.models.transaction import Transaction
 from app.db.session import sync_session_maker
 from app.services.pdf_generator import generate_financial_report
+from app.services.report_time import report_now
 
 logger = logging.getLogger(__name__)
 
 
 def _get_period_from_message(message: str) -> tuple:
     """Extrai período de início e fim baseado na mensagem do usuário."""
-    today = datetime.now(UTC)
-    msg_lower = message.lower()
+    period = resolve_financial_query_period(message, today=report_now().date())
+    start = period.start or report_now().date()
+    end = period.end or report_now().date()
+    period_start = datetime.combine(start, datetime.min.time(), tzinfo=report_now().tzinfo)
+    period_end = datetime.combine(end, datetime.max.time(), tzinfo=report_now().tzinfo)
+    if period.end == report_now().date():
+        period_end = report_now()
+    return period_start, period_end, period.label
 
-    # Hoje
-    if any(p in msg_lower for p in ["hoje"]):
-        period_start = today.replace(hour=0, minute=0, second=0, microsecond=0)
-        period_end = today
-        return period_start, period_end, "hoje"
 
-    # Ontem
-    if any(p in msg_lower for p in ["ontem"]):
-        yesterday = today - timedelta(days=1)
-        period_start = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
-        period_end = yesterday.replace(hour=23, minute=59, second=59)
-        return period_start, period_end, "ontem"
+def _to_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=report_now().tzinfo)
+    return value.astimezone(UTC)
 
-    # Esta semana / últimos 7 dias
-    if any(
-        p in msg_lower
-        for p in ["esta semana", "essa semana", "últimos 7 dias", "ultimos 7 dias", "semana"]
-    ):
-        period_start = today - timedelta(days=7)
-        period_end = today
-        return period_start, period_end, "últimos 7 dias"
 
-    # Últimos 30 dias
-    if any(p in msg_lower for p in ["últimos 30 dias", "ultimos 30 dias"]):
-        period_start = today - timedelta(days=30)
-        period_end = today
-        return period_start, period_end, "últimos 30 dias"
+def _format_report_date(value: datetime) -> str:
+    return value.strftime("%d/%m/%Y")
 
-    # Mês passado
-    if any(p in msg_lower for p in ["mês passado", "mes passado", "último mês", "ultimo mes"]):
-        if today.month == 1:
-            period_start = today.replace(
-                year=today.year - 1, month=12, day=1, hour=0, minute=0, second=0
-            )
-            period_end = today.replace(
-                year=today.year - 1, month=12, day=31, hour=23, minute=59, second=59
-            )
-        else:
-            period_start = today.replace(month=today.month - 1, day=1, hour=0, minute=0, second=0)
-            # Último dia do mês anterior
-            prev_month_end = today.replace(day=1) - timedelta(days=1)
-            period_end = prev_month_end.replace(hour=23, minute=59, second=59)
-        return period_start, period_end, "mês passado"
 
-    # Este mês (padrão se mencionar "mês" sem especificar)
-    if any(p in msg_lower for p in ["este mês", "esse mês", "mês atual", "mes atual", "mês"]):
-        period_start = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        period_end = today
-        return period_start, period_end, "este mês"
+def _fmt_money(value: float) -> str:
+    formatted = f"{float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {formatted}"
 
-    # Este ano
-    if any(p in msg_lower for p in ["este ano", "esse ano", "ano atual"]):
-        period_start = today.replace(month=1, day=1, hour=0, minute=0, second=0)
-        period_end = today
-        return period_start, period_end, "este ano"
 
-    # Padrão: mês atual
-    period_start = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    period_end = today
-    return period_start, period_end, "este mês"
+def _format_report_summary(
+    period_start: datetime,
+    period_end: datetime,
+    period_label: str,
+    total_income: float,
+    total_expense: float,
+) -> str:
+    balance = total_income - total_expense
+    return (
+        "📄 Relatório financeiro gerado com sucesso!\n\n"
+        f"Período: {period_start.strftime('%d/%m/%Y')} a {period_end.strftime('%d/%m/%Y')} ({period_label})\n\n"
+        f"Receitas: {_fmt_money(total_income)}\n"
+        f"Despesas: {_fmt_money(total_expense)}\n"
+        f"Saldo: {_fmt_money(balance)}\n\n"
+        "PDF gerado com sucesso!"
+    )
+
+
+def _row_type(row: dict[str, Any]) -> str:
+    value = row.get("type")
+    return str(getattr(value, "value", value))
+
+
+def _row_date(row: dict[str, Any]) -> datetime:
+    value = row.get("transaction_date")
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return report_now()
+
+
+def _period_datetimes_from_rows(
+    period_start: datetime,
+    period_end: datetime,
+    period_label: str,
+    rows: list[dict[str, Any]],
+) -> tuple[datetime, datetime]:
+    if period_label != "todo histórico" or not rows:
+        return period_start, period_end
+    dates = [_row_date(row) for row in rows if row.get("transaction_date")]
+    if not dates:
+        return period_start, period_end
+    start = min(dates).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    end = max(dates).replace(
+        hour=23,
+        minute=59,
+        second=59,
+        microsecond=999999,
+    )
+    return start, end
 
 
 def generate_report(state: dict[str, Any]) -> dict[str, Any]:
@@ -93,31 +112,29 @@ def generate_report(state: dict[str, Any]) -> dict[str, Any]:
         user = get_or_create_user(phone_number, db)
         message = state.get("message", "")
 
-        # Extrai período da mensagem
+        query_result = fetch_financial_transactions_for_query(message, phone_number)
+        transactions = query_result["rows"]
         period_start, period_end, period_label = _get_period_from_message(message)
-
-        # Busca transações do período
-        transactions = (
-            db.query(Transaction)
-            .filter(
-                Transaction.user_id == user.id,
-                Transaction.transaction_date >= period_start,
-                Transaction.transaction_date <= period_end,
-            )
-            .order_by(Transaction.transaction_date.desc())
-            .all()
+        period_start, period_end = _period_datetimes_from_rows(
+            period_start,
+            period_end,
+            period_label,
+            transactions,
         )
 
+        period_start_query = _to_utc(period_start)
+        period_end_query = _to_utc(period_end)
+
         # Calcula totais
-        total_income = sum(t.amount for t in transactions if str(t.type) == "INCOME")
-        total_expense = sum(t.amount for t in transactions if str(t.type) == "EXPENSE")
+        total_income = sum(float(t.get("amount") or 0) for t in transactions if _row_type(t) == "INCOME")
+        total_expense = sum(float(t.get("amount") or 0) for t in transactions if _row_type(t) == "EXPENSE")
 
         # Agrupa por categoria
         category_totals = {}
         for t in transactions:
-            if str(t.type) == "EXPENSE":
-                cat_name = t.category.name if t.category else "Outros"
-                category_totals[cat_name] = category_totals.get(cat_name, 0) + t.amount
+            if _row_type(t) == "EXPENSE":
+                cat_name = str(t.get("category") or "Outros")
+                category_totals[cat_name] = category_totals.get(cat_name, 0) + float(t.get("amount") or 0)
 
         categories_summary = [
             {"name": name, "total": total}
@@ -127,31 +144,45 @@ def generate_report(state: dict[str, Any]) -> dict[str, Any]:
         # Formata transações para o PDF
         tx_formatted = [
             {
-                "date": t.transaction_date.strftime("%d/%m/%Y"),
-                "type": str(t.type),
-                "category": t.category.name if t.category else "Outros",
-                "description": t.description or "-",
-                "amount": t.amount,
+                "date": _format_report_date(_row_date(t)),
+                "type": _row_type(t),
+                "category": str(t.get("category") or "Outros"),
+                "description": str(t.get("description") or "-"),
+                "amount": float(t.get("amount") or 0),
             }
             for t in transactions
         ]
 
-        # Busca orçamento ativo
-        budget = (
+        # Busca orçamentos
+        budgets = (
             db.query(Budget)
             .filter(Budget.user_id == user.id)
             .order_by(Budget.created_at.desc())
-            .first()
+            .all()
         )
 
-        budget_info = None
-        if budget:
-            budget_expenses = sum(t.amount for t in transactions if str(t.type) == "EXPENSE")
-            budget_info = {
-                "limit": budget.total_limit,
-                "spent": budget_expenses,
-                "name": budget.name,
-            }
+        budgets_info = []
+        for budget in budgets:
+            if budget.category_id:
+                spent = sum(
+                    abs(float(t.get("amount") or 0))
+                    for t in transactions
+                    if _row_type(t) == "EXPENSE" and t.get("category_id") == budget.category_id
+                )
+            else:
+                spent = sum(abs(float(t.get("amount") or 0)) for t in transactions if _row_type(t) == "EXPENSE")
+            limit = abs(float(budget.total_limit or 0))
+            remaining = limit - spent
+            percentage = round((spent / limit) * 100, 1) if limit > 0 else 0
+            budgets_info.append(
+                {
+                    "name": budget.category.name if budget.category else budget.name,
+                    "limit": limit,
+                    "spent": spent,
+                    "remaining": remaining,
+                    "percentage": percentage,
+                }
+            )
 
         # Busca metas
         goals = (
@@ -161,21 +192,27 @@ def generate_report(state: dict[str, Any]) -> dict[str, Any]:
         )
 
         goals_info = [
-            {"title": g.title, "target": g.target_amount, "current": g.current_amount}
+            {
+                "title": g.title,
+                "target": g.target_amount,
+                "current": g.current_amount,
+                "deadline": g.deadline,
+            }
             for g in goals
         ]
 
         # Gera PDF
         report_path = generate_financial_report(
-            user_name=user.name or user.phone_number,
+            user_name=user.full_name or user.phone_number or str(user.id),
             period_start=period_start.strftime("%d/%m/%Y"),
             period_end=period_end.strftime("%d/%m/%Y"),
             transactions=tx_formatted,
             categories_summary=categories_summary,
             total_income=total_income,
             total_expense=total_expense,
-            budget_info=budget_info,
+            budgets_info=budgets_info,
             goals_info=goals_info,
+            generated_at=report_now(),
         )
 
         # Gera CSV também
@@ -190,7 +227,7 @@ def generate_report(state: dict[str, Any]) -> dict[str, Any]:
                     writer.writerow(
                         [
                             tx["date"],
-                            "Receita" if tx["type"] == "INCOME" else "Gasto",
+                            "Receita" if tx["type"] == "INCOME" else "Despesa",
                             tx["category"],
                             tx["description"],
                             f"R$ {tx['amount']:,.2f}",
@@ -206,27 +243,23 @@ def generate_report(state: dict[str, Any]) -> dict[str, Any]:
             logger.warning(f"Erro ao gerar CSV: {csv_err}")
 
         state["report_path"] = report_path
-        state["report_summary"] = (
-            f"Relatório Financeiro\n"
-            f"Período: {period_start.strftime('%d/%m/%Y')} a {period_end.strftime('%d/%m/%Y')} ({period_label})\n\n"
-            f"Receitas: R$ {total_income:,.2f}\n"
-            f"Despesas: R$ {total_expense:,.2f}\n"
-            f"Saldo: R$ {(total_income - total_expense):,.2f}\n\n"
-            f"PDF e CSV gerados com sucesso!"
+        state["report_summary"] = _format_report_summary(
+            period_start,
+            period_end,
+            period_label,
+            total_income,
+            total_expense,
         )
 
         # Persist Report row so bridges can download via HTTP (Fase 7)
         try:
             from app.services.report_sync import create_report_sync
 
-            # user_uuid when paired with a web User
-            user_uuid = getattr(user, "merged_into_user_id", None)
             report_row = create_report_sync(
                 db,
                 user_id=user.id,
-                user_uuid=user_uuid,
-                period_start=period_start,
-                period_end=period_end,
+                period_start=period_start_query,
+                period_end=period_end_query,
                 file_url=report_path,
             )
             db.commit()

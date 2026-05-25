@@ -496,17 +496,27 @@ def _extract_from_image_receipt(state: dict[str, Any]) -> dict[str, Any] | None:
     img = state.get("context", {}).get("image_structured")
     if not img or not img.get("is_receipt") or not img.get("total_amount"):
         return None
+    try:
+        from app.agents.document_understanding import _normalize_receipt_payload
+        from app.agents.tools.documents import _receipt_category, _receipt_transaction_type
+
+        img = _normalize_receipt_payload(img)
+        tx_type = _receipt_transaction_type(img) or "EXPENSE"
+        category = _receipt_category(img)
+    except Exception:
+        tx_type = "EXPENSE"
+        category = _category_from_establishment(img.get("establishment"))
     establishment = img.get("establishment") or "Comprovante"
     try:
         amount = float(img["total_amount"])
     except (TypeError, ValueError):
         return None
     return {
-        "type": "EXPENSE",
+        "type": tx_type,
         "amount": amount,
         "currency": "BRL",
-        "category": _category_from_establishment(establishment),
-        "description": str(establishment),
+        "category": category,
+        "description": str(img.get("description") or establishment),
         "date": img.get("transaction_date"),
         "confidence": float(img.get("confidence", 0.85) or 0.85),
         "raw_text": img.get("raw_text", state.get("message", "")),

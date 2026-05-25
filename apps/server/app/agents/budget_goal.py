@@ -5,6 +5,7 @@ and alerts, called from the LangGraph orchestrator.
 Uses LLM for all data extraction — no fragile keyword rules.
 """
 
+import contextlib
 import logging
 import re
 from datetime import date
@@ -14,13 +15,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents import responses as resp
 from app.agents.persistence import get_or_create_user
+from app.agents.pending_actions import save_pending_action
 from app.db.models.phone_conversation import PhoneConversation
 from app.db.session import sync_session_maker
 from app.services.budget_service import (
     check_budget_alerts,
     check_goal_alerts,
-    create_budget,
-    create_goal,
     delete_all_budgets,
     delete_budget_by_name,
     delete_goal,
@@ -95,12 +95,9 @@ def _parse_budget_result(result: dict) -> dict:
     if "name" in result:
         data["name"] = str(result["name"]).capitalize()
     if "total_limit" in result:
-        try:
+        with contextlib.suppress(ValueError, TypeError):
             data["total_limit"] = float(result["total_limit"])
-        except (ValueError, TypeError):
-            pass
-    if "period" in result:
-        data["period"] = result["period"]
+    data["period"] = "monthly"
     return data
 
 
@@ -110,10 +107,8 @@ def _parse_goal_result(result: dict) -> dict:
     if "title" in result:
         data["title"] = str(result["title"]).capitalize()
     if "target_amount" in result:
-        try:
+        with contextlib.suppress(ValueError, TypeError):
             data["target_amount"] = float(result["target_amount"])
-        except (ValueError, TypeError):
-            pass
     if "deadline" in result:
         data["deadline"] = str(result["deadline"])
     return data
@@ -175,26 +170,22 @@ def create_budget_node(state: dict[str, Any]) -> dict[str, Any]:
             )
             return state
 
-        period = extracted.get("period", "monthly")
+        period = "monthly"
         name = extracted.get("name", "Geral")
-
-        budget = create_budget(
-            phone_number=phone_number,
-            name=name,
-            total_limit=float(amount),
-            period=period,
-            budget_type="category",  # single-turn always category type
+        params = {
+            "name": name,
+            "total_limit": float(amount),
+            "period": period,
+            "budget_type": "category",
+        }
+        state["response"] = save_pending_action(
+            phone_number,
+            action="create_budget",
+            params=params,
+            summary=resp.budget_confirmation(name, float(amount), period),
+            channel=str((state.get("context") or {}).get("channel") or "whatsapp"),
         )
-
-        state["budget_data"] = budget
-        budget_label = "Conta" if budget.get("budget_type") == "general" else "Orçamento"
-        state["response"] = (
-            f"{budget_label} criado! 📊\n\n"
-            f"{'Nome' if budget_label == 'Conta' else 'Categoria'}: {budget['name']}\n"
-            f"{'Saldo' if budget_label == 'Conta' else 'Limite'}: R$ {budget['total_limit']:,.2f}\n"
-            f"Período: {resp.period_label(budget.get('period'))}"
-        )
-        logger.info(f"Budget created: {budget['id']} — {budget['name']}")
+        logger.info("Budget prepared for confirmation: %s — %s", phone_number, name)
 
     except Exception as e:
         logger.error(f"Error creating budget: {e}")
@@ -221,18 +212,19 @@ def create_goal_node(state: dict[str, Any]) -> dict[str, Any]:
         deadline = extracted.get("deadline")
         deadline_date = _future_deadline(deadline)
 
-        goal = create_goal(
-            phone_number=phone_number,
-            title=title,
-            target_amount=float(amount),
-            deadline=deadline_date,
+        params = {
+            "title": title,
+            "target_amount": float(amount),
+            "deadline": deadline_date.isoformat() if deadline_date else None,
+        }
+        state["response"] = save_pending_action(
+            phone_number,
+            action="create_goal",
+            params=params,
+            summary=resp.goal_confirmation(title, float(amount), deadline_date),
+            channel=str((state.get("context") or {}).get("channel") or "whatsapp"),
         )
-
-        state["goal_data"] = goal
-        state["response"] = resp.goal_created(
-            goal["title"], goal["target_amount"], goal.get("deadline")
-        )
-        logger.info(f"Goal created: {goal['id']} — {goal['title']}")
+        logger.info("Goal prepared for confirmation: %s — %s", phone_number, title)
 
     except Exception as e:
         logger.error(f"Error creating goal: {e}")
@@ -593,9 +585,7 @@ def delete_transaction_node(state: dict[str, Any]) -> dict[str, Any]:
         if not tx_id:
             last_tx = (
                 db.query(Transaction)
-                .filter(
-                    Transaction.user_id == user.id,
-                )
+                .filter(Transaction.user_id == user.id)
                 .order_by(Transaction.transaction_date.desc())
                 .first()
             )
