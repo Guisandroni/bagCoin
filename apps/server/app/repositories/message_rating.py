@@ -14,7 +14,7 @@ from app.db.models.message_rating import MessageRating
 async def get_rating_by_message_and_user(
     db: AsyncSession,
     message_id: UUID,
-    user_id: UUID,
+    user_id: int,
 ) -> MessageRating | None:
     """Get a user's rating for a specific message."""
     query = select(MessageRating).where(
@@ -29,7 +29,7 @@ async def create_rating(
     db: AsyncSession,
     *,
     message_id: UUID,
-    user_id: UUID,
+    user_id: int,
     rating: int,
     comment: str | None = None,
 ) -> MessageRating:
@@ -85,7 +85,7 @@ async def get_user_ratings_for_messages(
     db: AsyncSession,
     *,
     message_ids: list[UUID],
-    user_id: UUID,
+    user_id: int,
 ) -> dict[UUID, int]:
     """Return mapping of message_id → rating value for a single user."""
     if not message_ids:
