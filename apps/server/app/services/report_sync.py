@@ -1,7 +1,6 @@
 """Sync helpers for Report model — for use inside agent nodes."""
 
 from datetime import datetime
-from uuid import UUID
 
 from app.db.models.report import Report
 
@@ -9,8 +8,7 @@ from app.db.models.report import Report
 def create_report_sync(
     db,
     *,
-    user_id: int | None,
-    user_uuid: UUID | None,
+    user_id: int,
     period_start: datetime,
     period_end: datetime,
     file_url: str | None,
@@ -18,7 +16,6 @@ def create_report_sync(
     """Create a Report row (sync, for agent nodes)."""
     report = Report(
         user_id=user_id,
-        user_uuid=user_uuid,
         period_start=period_start,
         period_end=period_end,
         file_url=file_url,

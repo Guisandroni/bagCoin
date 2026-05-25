@@ -3,8 +3,6 @@
 Contains business logic for budget operations including spent calculation.
 """
 
-from uuid import UUID
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
@@ -19,7 +17,7 @@ class BudgetService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_budget(self, budget_id: int, user_uuid: UUID | None = None) -> Budget:
+    async def get_budget(self, budget_id: int, user_id: int | None = None) -> Budget:
         """Get budget by ID.
 
         Raises:
@@ -31,7 +29,7 @@ class BudgetService:
                 message="Budget not found",
                 details={"budget_id": budget_id},
             )
-        if user_uuid is not None and budget.user_uuid is not None and budget.user_uuid != user_uuid:
+        if user_id is not None and budget.user_id != user_id:
             raise NotFoundError(
                 message="Budget not found",
                 details={"budget_id": budget_id},
@@ -40,7 +38,7 @@ class BudgetService:
 
     async def list_budgets(
         self,
-        user_uuid: UUID | None = None,
+        user_id: int | None = None,
         *,
         skip: int = 0,
         limit: int = 50,
@@ -52,20 +50,19 @@ class BudgetService:
         """
         items = await budget_repo.get_budgets_by_user(
             self.db,
-            user_uuid=user_uuid,
+            user_id=user_id,
             skip=skip,
             limit=limit,
         )
         total = await budget_repo.count_budgets(
             self.db,
-            user_uuid=user_uuid,
+            user_id=user_id,
         )
         return items, total
 
     async def create_budget(
         self,
         data: BudgetCreate,
-        user_uuid: UUID | None = None,
         user_id: int | None = None,
     ) -> Budget:
         """Create a new budget."""
@@ -73,11 +70,11 @@ class BudgetService:
         return await budget_repo.create_budget(
             self.db,
             user_id=user_id,
-            user_uuid=user_uuid,
             category_id=data.category_id,
             name=data.name,
             period=data.period,
             total_limit=data.total_limit,
+            budget_date=data.budget_date,
             budget_type=data.budget_type,
             items=items_data,
         )
@@ -86,14 +83,14 @@ class BudgetService:
         self,
         budget_id: int,
         data: BudgetUpdate,
-        user_uuid: UUID | None = None,
+        user_id: int | None = None,
     ) -> Budget:
         """Update a budget.
 
         Raises:
             NotFoundError: If budget does not exist.
         """
-        budget = await self.get_budget(budget_id, user_uuid=user_uuid)
+        budget = await self.get_budget(budget_id, user_id=user_id)
         update_data = data.model_dump(exclude_unset=True)
         return await budget_repo.update_budget(
             self.db, db_budget=budget, update_data=update_data
@@ -102,7 +99,7 @@ class BudgetService:
     async def delete_budget(
         self,
         budget_id: int,
-        user_uuid: UUID | None = None,
+        user_id: int | None = None,
     ) -> bool:
         """Delete a budget.
 
@@ -110,7 +107,7 @@ class BudgetService:
             NotFoundError: If budget does not exist or user has no access.
         """
         # Verify ownership first
-        await self.get_budget(budget_id, user_uuid=user_uuid)
+        await self.get_budget(budget_id, user_id=user_id)
         deleted = await budget_repo.delete_budget(self.db, budget_id)
         if not deleted:
             raise NotFoundError(
@@ -119,12 +116,12 @@ class BudgetService:
             )
         return True
 
-    async def get_spent_for_budget(self, budget_id: int, user_uuid: UUID | None = None) -> float:
+    async def get_spent_for_budget(self, budget_id: int, user_id: int | None = None) -> float:
         """Calculate total spent for a budget in its period.
 
         This queries transactions that match the budget's period and categories.
         """
-        budget = await self.get_budget(budget_id, user_uuid=user_uuid)
+        budget = await self.get_budget(budget_id, user_id=user_id)
         # For now return 0 - actual spent calculation depends on transaction model
         # which may not exist yet. This is a placeholder.
         return 0.0

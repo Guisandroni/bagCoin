@@ -1,7 +1,6 @@
 """Recurring transaction helpers."""
 
 from datetime import UTC, datetime
-from uuid import UUID
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import select
@@ -12,7 +11,6 @@ from app.db.models.transaction import Transaction
 
 
 def next_run_from(start: datetime, frequency: str) -> datetime:
-    """Return the next run date after a transaction date."""
     if start.tzinfo is None:
         start = start.replace(tzinfo=UTC)
     if frequency == "weekly":
@@ -25,7 +23,7 @@ def next_run_from(start: datetime, frequency: str) -> datetime:
 async def create_recurring_transaction(
     db: AsyncSession,
     *,
-    user_uuid: UUID,
+    user_id: int,
     type: str,
     amount: float,
     category_id: int | None,
@@ -34,7 +32,7 @@ async def create_recurring_transaction(
     start_date: datetime,
 ) -> RecurringTransaction:
     recurring = RecurringTransaction(
-        user_uuid=user_uuid,
+        user_id=user_id,
         type=type,
         amount=abs(amount),
         category_id=category_id,
@@ -54,7 +52,6 @@ async def materialize_due_recurring_transactions(
     *,
     now: datetime | None = None,
 ) -> int:
-    """Create transactions for due recurring rules and advance their next date."""
     run_at = now or datetime.now(UTC)
     result = await db.execute(
         select(RecurringTransaction).where(
@@ -65,7 +62,7 @@ async def materialize_due_recurring_transactions(
     created = 0
     for recurring in result.scalars().all():
         transaction = Transaction(
-            user_uuid=recurring.user_uuid,
+            user_id=recurring.user_id,
             type=recurring.type,
             amount=abs(recurring.amount),
             category_id=recurring.category_id,

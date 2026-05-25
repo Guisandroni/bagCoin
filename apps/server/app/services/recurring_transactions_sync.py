@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from dateutil.relativedelta import relativedelta
 
 from app.db.models.recurring_transaction import RecurringTransaction
-from app.db.models.transaction import Transaction
 
 
 def _next_run(start: datetime, frequency: str) -> datetime:
@@ -21,7 +20,7 @@ def _next_run(start: datetime, frequency: str) -> datetime:
 def create_recurring_transaction_sync(
     db,
     *,
-    user_uuid,
+    user_id: int,
     type: str,
     amount: float,
     category_id: int | None,
@@ -34,7 +33,7 @@ def create_recurring_transaction_sync(
         start_date = start_date.replace(tzinfo=UTC)
 
     recurring = RecurringTransaction(
-        user_uuid=user_uuid,
+        user_id=user_id,
         type=type,
         amount=abs(amount),
         category_id=category_id,
