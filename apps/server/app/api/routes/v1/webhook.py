@@ -60,15 +60,17 @@ def normalize_whatsapp_id(chat_id: str) -> str:
 
 
 def is_duplicate_message(message_id: str) -> bool:
-    """Retorna True se a mensagem já foi processada nos últimos 60 segundos."""
+    """Retorna True se a mensagem já foi processada nos últimos 60 segundos.
+
+    Uses atomic SET NX to prevent race conditions with multiple workers.
+    """
     r = _get_redis()
     if not message_id or not r:
         return False
     key = f"msg:processed:{message_id}"
-    if r.exists(key):
-        return True
-    r.setex(key, 60, "1")
-    return False
+    # SET NX is atomic: returns True only if the key was set (first caller wins)
+    was_set = r.set(key, "1", nx=True, ex=60)
+    return not was_set  # If was_set is False/None, key already existed → duplicate
 
 
 def _source_format_from_payload(message_type: str | None, media: dict | None = None) -> str:

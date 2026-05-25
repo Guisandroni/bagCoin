@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 DEPLOY_PATH="${DEPLOY_PATH:-$HOME/bagCoin}"
-DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
+DEPLOY_BRANCH="${DEPLOY_BRANCH:-feat/periodo-llm-classificacao-persistencia}"
 ENV_FILE="${ENV_FILE:-.env.prod}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 TRAEFIK_USERSFILE="${TRAEFIK_USERSFILE:-deploy/traefik/usersfile}"

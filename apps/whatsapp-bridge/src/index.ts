@@ -102,6 +102,15 @@ client.on('message', async (msg) => {
 
   console.log(`\n📩 Mensagem de ${msg.from}: ${msg.body || '(mídia)'}`);
 
+  // ── Presença ──
+  const chat = await msg.getChat();
+  if (config.sendSeen) {
+    await chat.sendSeen();
+  }
+  if (config.showTyping) {
+    await chat.sendStateTyping();
+  }
+
   // Constrói payload para a API
   const payload: WebhookPayload = {
     phone_number: msg.from.replace('@c.us', ''),
@@ -139,6 +148,11 @@ client.on('message', async (msg) => {
 
   // Envia para a API FastAPI
   const data = await sendToFastApi(payload);
+
+  // Limpa estado de digitando
+  if (config.showTyping) {
+    await chat.clearState();
+  }
 
   // Resposta de texto
   if (hasReply(data)) {
