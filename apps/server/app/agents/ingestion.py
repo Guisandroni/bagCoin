@@ -35,6 +35,25 @@ def _normalize(text: str) -> str:
     return unicodedata.normalize("NFKD", text.lower()).encode("ASCII", "ignore").decode("ASCII")
 
 
+def _looks_like_budget_or_goal_request(msg_norm: str) -> bool:
+    """Detect messages that are clearly about creating a budget or goal, not a transaction."""
+    if not msg_norm:
+        return False
+    has_budget_keyword = any(kw in msg_norm for kw in ("orcamento", "limite"))
+    has_goal_keyword = "meta" in msg_norm and "orcamento" not in msg_norm
+    if not (has_budget_keyword or has_goal_keyword):
+        return False
+    # Must have a numeric value
+    has_value = bool(re.search(r"\d+", msg_norm))
+    if not has_value:
+        return False
+    # Exclude if it looks like a spending report query
+    report_markers = ("quanto", "como estao", "resumo", "relatorio", "saldo")
+    if any(m in msg_norm for m in report_markers):
+        return False
+    return True
+
+
 def _looks_like_report_summary_request(msg_norm: str) -> bool:
     """Detect broad financial summary requests that should generate a PDF report."""
     if not msg_norm:
@@ -142,7 +161,21 @@ def classify_intent(state: dict[str, Any]) -> dict[str, Any]:
         return state
 
     # =====================================================================
-    # FAST-PATH 3: broad financial summary → PDF report
+    # FAST-PATH 3: "orçamento"/"meta" with value → manage (not register)
+    # =====================================================================
+    if _looks_like_budget_or_goal_request(msg_norm):
+        if "meta" in msg_norm and "orcamento" not in msg_norm:
+            state["intent"] = IntentType.CREATE_GOAL.value
+        else:
+            state["intent"] = IntentType.CREATE_BUDGET.value
+        state["macro_intent"] = "manage"
+        state["confidence"] = 1.0
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"[classify_intent] Fast-path: budget/goal manage ({elapsed:.0f}ms)")
+        return state
+
+    # =====================================================================
+    # FAST-PATH 4: broad financial summary → PDF report
     # =====================================================================
     if _looks_like_report_summary_request(msg_norm):
         state["intent"] = IntentType.GENERATE_REPORT.value
