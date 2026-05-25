@@ -66,7 +66,7 @@ class MessageRatingRead(MessageRatingBase, TimestampSchema):
 
     id: UUID
     message_id: UUID
-    user_id: UUID
+    user_id: int
 
 
 class MessageRatingWithDetails(MessageRatingRead):

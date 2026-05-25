@@ -1,7 +1,6 @@
 """User schemas."""
 
 from enum import StrEnum
-from uuid import UUID
 
 from pydantic import EmailStr, Field, field_validator, model_validator
 
@@ -91,10 +90,10 @@ class UserUpdate(BaseSchema):
 class UserRead(UserBase, TimestampSchema):
     """Schema for reading a user."""
 
-    id: UUID
+    id: int
     role: UserRole = UserRole.USER
     avatar_url: str | None = None
-    auth_provider: str = "email"
+    auth_provider: str | None = "email"
     email_verified: bool = False
 
 
