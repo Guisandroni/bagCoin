@@ -17,6 +17,7 @@ interface ProgressCardProps {
   iconColor?: string
   percentageClassName?: string
   remainingClassName?: string
+  titleTrailing?: ReactNode
   className?: string
 }
 
@@ -41,6 +42,7 @@ export function ProgressCard({
   iconColor,
   percentageClassName,
   remainingClassName,
+  titleTrailing,
   className,
 }: ProgressCardProps) {
   const barColor = defaultColors[color] || defaultColors.blue
@@ -55,26 +57,29 @@ export function ProgressCard({
       )}
     >
       {(title || icon) && (
-        <div className="flex items-center gap-3">
-          {icon && (
-            <div
-              className={cn(
-                "w-12 h-12 rounded-xl flex items-center justify-center",
-                iconBg || "bg-[var(--rls-surface-container)]"
-              )}
-              style={iconColor ? { color: iconColor } : undefined}
-            >
-              {icon}
-            </div>
-          )}
-          <div className="flex flex-col">
-            <span className="rls-text-body-lg text-[var(--rls-on-surface)]">{title}</span>
-            {subtitle && (
-              <span className="rls-text-body-md text-[var(--rls-on-surface-variant)]">
-                {subtitle}
-              </span>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            {icon && (
+              <div
+                className={cn(
+                  "w-12 h-12 rounded-xl flex items-center justify-center",
+                  iconBg || "bg-[var(--rls-surface-container)]"
+                )}
+                style={iconColor ? { color: iconColor } : undefined}
+              >
+                {icon}
+              </div>
             )}
+            <div className="flex min-w-0 flex-col">
+              <span className="rls-text-body-lg text-[var(--rls-on-surface)]">{title}</span>
+              {subtitle && (
+                <span className="rls-text-body-md text-[var(--rls-on-surface-variant)]">
+                  {subtitle}
+                </span>
+              )}
+            </div>
           </div>
+          {titleTrailing ? <div className="shrink-0 text-right">{titleTrailing}</div> : null}
         </div>
       )}
 

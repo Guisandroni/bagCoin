@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowDown, ArrowUp, Search } from "lucide-react"
+import { ArrowDown, ArrowUp, Download } from "lucide-react"
 import { AppBar } from "./app-bar"
 import { InfoCard } from "./info-card"
 import { DonutChart } from "./donut-chart"
@@ -18,6 +18,8 @@ interface DashboardViewProps {
   onViewAllTransactions?: () => void
   onViewAllCategories?: () => void
   onAddGoal?: () => void
+  onExportCsv?: () => void
+  isExportingCsv?: boolean
 }
 
 export function DashboardView({
@@ -26,6 +28,8 @@ export function DashboardView({
   onNavigate,
   onViewAllTransactions,
   onViewAllCategories,
+  onExportCsv,
+  isExportingCsv,
 }: DashboardViewProps) {
   const toggleDrawer = useAppStore((state) => state.toggleDrawer)
 
@@ -35,7 +39,13 @@ export function DashboardView({
         title="Dashboard"
         onOpenDrawer={toggleDrawer}
         titleClassName="min-w-0 flex-1 text-left text-[22px] font-semibold leading-7 text-[var(--rls-on-surface)]"
-        actions={[{ icon: <Search className="h-6 w-6" />, onClick: () => {} }]}
+        actions={[
+          {
+            icon: <Download className="h-6 w-6" />,
+            onClick: onExportCsv ?? (() => {}),
+            label: isExportingCsv ? "Exportando CSV" : "Exportar CSV",
+          },
+        ]}
         className="border-b border-[var(--rls-outline-variant)]"
       />
 
@@ -87,12 +97,12 @@ export function DashboardView({
             {summary.recentTransactions.slice(0, 4).map((tx) => (
               <div
                 key={tx.id}
-                className="flex justify-between items-center h-[72px] border-b border-[var(--rls-surface-variant)] last:border-0"
+                className="flex h-[72px] min-w-0 items-center justify-between gap-3 border-b border-[var(--rls-surface-variant)] last:border-0"
               >
-                <div className="flex items-center gap-4">
+                <div className="flex min-w-0 flex-1 items-center gap-4">
                   <div
                     className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center",
+                      "w-12 h-12 shrink-0 rounded-xl flex items-center justify-center",
                       tx.type === "receita"
                         ? "bg-[var(--rls-secondary-container)]/20"
                         : "bg-[var(--rls-error-container)]"
@@ -104,8 +114,8 @@ export function DashboardView({
                       className={tx.type === "receita" ? "text-[var(--rls-secondary)]" : "text-[var(--rls-error)]"}
                     />
                   </div>
-                  <div className="flex flex-col">
-                    <span className="rls-text-body-lg text-[var(--rls-on-surface)] text-sm">
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="rls-text-body-lg truncate text-sm text-[var(--rls-on-surface)]">
                       {tx.name}
                     </span>
                     <span className="rls-text-body-md text-[var(--rls-on-surface-variant)] text-xs">
@@ -115,7 +125,7 @@ export function DashboardView({
                 </div>
                 <span
                   className={cn(
-                    "rls-text-title-lg text-sm font-semibold",
+                    "rls-text-title-lg shrink-0 whitespace-nowrap text-right text-sm font-semibold",
                     tx.type === "receita"
                       ? "text-[var(--rls-secondary)]"
                       : "text-[var(--rls-error)]"
@@ -130,32 +140,17 @@ export function DashboardView({
         </section>
 
         {/* Donut Chart */}
-        <section className="grid grid-cols-1 gap-[var(--rls-stack-gap-md)]">
-          <div className="bg-[var(--rls-surface-container-lowest)] rounded-xl p-[var(--rls-inline-padding-md)] shadow-sm">
-            <div className="mb-[var(--rls-stack-gap-sm)] flex items-center justify-between">
-              <span className="rls-text-title-lg text-[var(--rls-on-surface)] text-base">
-                Categorias
-              </span>
-              <button
-                onClick={onViewAllCategories}
-                className="rls-text-label-lg text-[var(--rls-primary)]"
-              >
-                Ver mais
-              </button>
-            </div>
-            <DonutChart
-              segments={summary.categoryBreakdown.map((cat) => ({
-                value: cat.percentage,
-                color: cat.color.startsWith("bg-") || cat.color.startsWith("text-")
-                  ? cat.color
-                  : "text-[var(--rls-primary-container)]",
-                label: cat.name,
-              }))}
-              centerValue={formatCurrency(summary.expenses)}
-              centerLabel="Gasto Total"
-            />
-          </div>
-        </section>
+        <DonutChart
+          segments={summary.categoryBreakdown.map((cat) => ({
+            value: cat.percentage,
+            amount: cat.amount,
+            color: cat.color,
+            label: cat.name,
+            emoji: cat.emoji,
+          }))}
+          totalValue={summary.expenses}
+          onOpen={onViewAllCategories}
+        />
 
         {/* Goals & Budgets */}
         <section className="bg-[var(--rls-surface-container-lowest)] p-[var(--rls-inline-padding-md)] shadow-sm rounded-[var(--rls-radius)] flex flex-col gap-[var(--rls-stack-gap-md)] mb-4">

@@ -88,6 +88,7 @@ export function SavingsGoalsView({
           {goals.map((goal) => {
             const percentage = goal.target > 0 ? Math.round((goal.current / goal.target) * 100) : 0
             const tone = getGoalTone(goal, percentage)
+            const statusLabel = getGoalStatusLabel(goal.status, percentage)
             return (
               <button
                 type="button"
@@ -109,14 +110,24 @@ export function SavingsGoalsView({
                       </span>
                     </div>
                   </div>
-                  <span
-                    className={cn(
-                      "rls-text-label-lg px-2 py-0.5 rounded-[var(--rls-radius-pill)]",
-                      tone.badge
-                    )}
-                  >
-                    {formatPercent(percentage)}%
-                  </span>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span
+                      className={cn(
+                        "rls-text-label-lg rounded-[var(--rls-radius-pill)] px-2 py-0.5",
+                        tone.badge
+                      )}
+                    >
+                      {formatPercent(percentage)}%
+                    </span>
+                    <span
+                      className={cn(
+                        "rls-text-label-md rounded-[var(--rls-radius-pill)] px-2 py-0.5",
+                        tone.badge
+                      )}
+                    >
+                      {statusLabel}
+                    </span>
+                  </div>
                 </div>
                 <div className="w-full h-2 bg-[var(--rls-surface-container-high)] rounded-full overflow-hidden">
                   <div
@@ -135,6 +146,12 @@ export function SavingsGoalsView({
       ) : null}
     </div>
   )
+}
+
+function getGoalStatusLabel(status: ReleaseGoal["status"], percentage: number): string {
+  if (status === "cancelled") return "Cancelada"
+  if (status === "completed" || percentage >= 100) return "Concluída"
+  return "Ativa"
 }
 
 function getGoalTone(goal: ReleaseGoal, percentage: number) {

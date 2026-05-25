@@ -1,13 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { Manrope } from "next/font/google"
 import { Button } from "@/components/ui/button"
-
-const manrope = Manrope({
-  subsets: ["latin"],
-  variable: "--font-manrope",
-})
 
 export default function GlobalError({
   error,
@@ -21,8 +15,8 @@ export default function GlobalError({
   }, [error])
 
   return (
-    <html lang="pt-BR" suppressHydrationWarning className={manrope.variable}>
-      <body className="min-h-screen flex items-center justify-center bg-background font-[family-name:var(--font-manrope)]">
+    <html lang="pt-BR" suppressHydrationWarning>
+      <body className="min-h-screen flex items-center justify-center bg-background font-sans">
         <div className="text-center space-y-4 p-8">
           <h1 className="text-4xl font-bold text-foreground">Erro inesperado</h1>
           <p className="text-muted-foreground max-w-md">

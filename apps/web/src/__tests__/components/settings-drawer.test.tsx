@@ -67,9 +67,10 @@ describe("SettingsDrawer", () => {
     expect(screen.getByText("Orçamentos")).toBeInTheDocument()
     expect(screen.getByText("Metas")).toBeInTheDocument()
     expect(screen.getByText("Perfil")).toBeInTheDocument()
-    expect(screen.getByText("Relatórios")).toBeInTheDocument()
+    expect(screen.getByText("Suporte")).toBeInTheDocument()
+    expect(screen.queryByText("Relatórios")).not.toBeInTheDocument()
     expect(screen.getByText("WhatsApp")).toBeInTheDocument()
-    expect(screen.getByText("Telegram")).toBeInTheDocument()
+    expect(screen.queryByText("Telegram")).not.toBeInTheDocument()
     expect(screen.queryByText("Aparência")).not.toBeInTheDocument()
     expect(screen.queryByText("Notificações")).not.toBeInTheDocument()
     expect(screen.queryByText("Privacidade")).not.toBeInTheDocument()
@@ -93,14 +94,11 @@ describe("SettingsDrawer", () => {
     expect(mockCloseDrawer).toHaveBeenCalled()
     expect(mockPush).toHaveBeenCalledWith("/app/perfil")
 
-    fireEvent.click(screen.getByText("Relatórios"))
-    expect(mockPush).toHaveBeenCalledWith("/app/relatorios")
+    fireEvent.click(screen.getByText("Suporte"))
+    expect(mockPush).toHaveBeenCalledWith("/app/suporte")
 
     fireEvent.click(screen.getByText("WhatsApp"))
     expect(mockOpenIntegrationChat).toHaveBeenCalledWith("whatsapp")
-
-    fireEvent.click(screen.getByText("Telegram"))
-    expect(mockOpenIntegrationChat).toHaveBeenCalledWith("telegram")
   })
 
 })

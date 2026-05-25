@@ -84,7 +84,7 @@ export default function LoginPage() {
           onLogin={handleLogin}
           onGoogleLogin={handleGoogleLogin}
           onRegisterClick={() => router.push("/register")}
-          onForgotPassword={() => router.push("/login")}
+          onForgotPassword={() => router.push("/forgot-password")}
           isLoading={isLoading}
           errorMessage={errorMessage}
           onDismissError={() => {

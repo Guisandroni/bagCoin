@@ -5,6 +5,11 @@ import apiClient, {
   getTokenStore,
   setAuthCookies,
 } from "@/lib/api-client"
+import {
+  PASSWORD_RESET_INVALID_MESSAGE,
+  PASSWORD_RESET_REQUEST_ERROR_MESSAGE,
+  safePasswordResetRequestMessage,
+} from "@/lib/toast-messages"
 
 interface User {
   id: string
@@ -56,6 +61,8 @@ interface AuthState {
   loginWithGoogle: (idToken: string) => Promise<GoogleLoginResult>
   verifyEmail: (email: string, code: string) => Promise<VerificationSuccessResponse>
   resendVerification: (email: string) => Promise<ResendVerificationResponse>
+  forgotPassword: (email: string) => Promise<void>
+  resetPassword: (token: string, password: string) => Promise<void>
   logout: () => void
   fetchUser: () => Promise<void>
   clearError: () => void
@@ -204,6 +211,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error: unknown) {
       const err = error as ApiClientError
       set({ isLoading: false, error: err.message || "Não foi possível reenviar o código" })
+      throw error
+    }
+  },
+
+  forgotPassword: async (email: string) => {
+    set({ isLoading: true, error: null })
+    try {
+      await apiClient.post("/auth/forgot-password", { email })
+      set({ isLoading: false, error: null })
+    } catch (error: unknown) {
+      set({ isLoading: false, error: safePasswordResetRequestMessage(error) || PASSWORD_RESET_REQUEST_ERROR_MESSAGE })
+      throw error
+    }
+  },
+
+  resetPassword: async (token: string, password: string) => {
+    set({ isLoading: true, error: null })
+    try {
+      await apiClient.post("/auth/reset-password", { token, password })
+      set({ isLoading: false, error: null })
+    } catch (error: unknown) {
+      set({ isLoading: false, error: PASSWORD_RESET_INVALID_MESSAGE })
       throw error
     }
   },

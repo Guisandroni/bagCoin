@@ -31,6 +31,7 @@ export type ReleaseCreateActionPayload =
       name: string
       category_name: string
       period: "monthly" | "weekly" | "yearly"
+      budget_date: string
       total_limit: number
       budget_type: "category"
     }
@@ -107,8 +108,9 @@ function CreateActionModalContent({
   const [selectedBudgetCategory, setSelectedBudgetCategory] = useState<ReleaseCategory | null>(null)
   const [budgetPeriod, setBudgetPeriod] = useState<"monthly" | "weekly" | "yearly">("monthly")
   const [isRecurring, setIsRecurring] = useState(false)
-  const [recurrenceFrequency, setRecurrenceFrequency] = useState<"weekly" | "monthly" | "yearly">("monthly")
-  const [date, setDate] = useState("")
+  const [date, setDate] = useState(() =>
+    kind === "transaction" || kind === "budget" || kind === "goal" ? getTodayIso() : ""
+  )
   const [color, setColor] = useState(CATEGORY_COLORS[0])
 
   const title = {
@@ -143,7 +145,7 @@ function CreateActionModalContent({
         source: "manual",
         status: "confirmed",
         is_recurring: isRecurring,
-        recurrence_frequency: isRecurring ? recurrenceFrequency : undefined,
+        recurrence_frequency: isRecurring ? "monthly" : undefined,
       })
     } else if (kind === "budget" && selectedBudgetCategory?.id) {
       await onSubmit({
@@ -152,6 +154,7 @@ function CreateActionModalContent({
         name: selectedBudgetCategory.name,
         category_name: selectedBudgetCategory.name,
         period: budgetPeriod,
+        budget_date: date || getTodayIso(),
         total_limit: parsedAmount,
         budget_type: "category",
       })
@@ -199,7 +202,7 @@ function CreateActionModalContent({
       <div className="fixed bottom-0 left-1/2 z-[60] flex w-[min(100%,28rem)] -translate-x-1/2 justify-center">
         <form
           onSubmit={handleSubmit}
-          className="w-full rounded-t-[12px] bg-[var(--rls-surface-container-lowest)] shadow-sheet"
+          className="flex h-dvh w-full flex-col rounded-t-[12px] bg-[var(--rls-surface-container-lowest)] shadow-sheet"
         >
           <div className="flex items-start justify-between border-b border-[var(--rls-outline-variant)] px-[var(--rls-inline-padding-md)] py-4">
             <div>
@@ -220,7 +223,7 @@ function CreateActionModalContent({
             </button>
           </div>
 
-          <div className="flex max-h-[68dvh] flex-col gap-4 overflow-y-auto px-[var(--rls-inline-padding-md)] py-5">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-[var(--rls-inline-padding-md)] py-5">
             {kind === "transaction" ? (
               <Segment
                 value={transactionType}
@@ -248,15 +251,9 @@ function CreateActionModalContent({
             ) : null}
 
             {kind === "budget" ? (
-              <Segment
-                value={budgetPeriod}
-                options={[
-                  { label: "Mensal", value: "monthly" },
-                  { label: "Semanal", value: "weekly" },
-                  { label: "Anual", value: "yearly" },
-                ]}
-                onChange={setBudgetPeriod}
-              />
+              <p className="rls-text-body-md rounded-[var(--rls-radius)] bg-[var(--rls-surface-container)] px-4 py-3 text-[var(--rls-on-surface-variant)]">
+                Orçamento mensal.
+              </p>
             ) : null}
 
             {kind !== "budget" ? (
@@ -272,9 +269,7 @@ function CreateActionModalContent({
             {kind === "transaction" ? (
               <RecurringTransactionFields
                 isRecurring={isRecurring}
-                recurrenceFrequency={recurrenceFrequency}
                 onRecurringChange={setIsRecurring}
-                onFrequencyChange={setRecurrenceFrequency}
               />
             ) : null}
 
@@ -291,6 +286,7 @@ function CreateActionModalContent({
                   setSelectedTransactionCategory(category)
                   setCategoryName(category.name)
                 }}
+                collapsible
               />
             ) : null}
 
@@ -300,6 +296,7 @@ function CreateActionModalContent({
                 categories={categories}
                 selectedCategory={selectedBudgetCategory}
                 onSelect={setSelectedBudgetCategory}
+                collapsible
               />
             ) : null}
 
@@ -330,7 +327,7 @@ function CreateActionModalContent({
               />
             ) : null}
 
-            {kind === "transaction" || kind === "goal" ? (
+            {kind === "transaction" || kind === "budget" || kind === "goal" ? (
               <ReleaseDatePicker
                 label={kind === "goal" ? "Prazo" : "Data"}
                 value={date}
@@ -416,14 +413,10 @@ function Segment<T extends string>({
 
 function RecurringTransactionFields({
   isRecurring,
-  recurrenceFrequency,
   onRecurringChange,
-  onFrequencyChange,
 }: {
   isRecurring: boolean
-  recurrenceFrequency: "weekly" | "monthly" | "yearly"
   onRecurringChange: (value: boolean) => void
-  onFrequencyChange: (value: "weekly" | "monthly" | "yearly") => void
 }) {
   return (
     <div className="flex flex-col gap-3 rounded-[var(--rls-radius)] bg-[var(--rls-surface-container-lowest)] p-3">
@@ -439,22 +432,20 @@ function RecurringTransactionFields({
         />
       </label>
       {isRecurring ? (
-        <Segment
-          value={recurrenceFrequency}
-          options={[
-            { label: "Semanal", value: "weekly" },
-            { label: "Mensal", value: "monthly" },
-            { label: "Anual", value: "yearly" },
-          ]}
-          onChange={onFrequencyChange}
-        />
+        <span className="rls-text-body-md text-[var(--rls-on-surface-variant)]">
+          Será repetida mensalmente.
+        </span>
       ) : null}
     </div>
   )
 }
 
 function getTodayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, "0")
+  const day = String(today.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
 }
 
 function normalizeSearch(value: string): string {

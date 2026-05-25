@@ -14,6 +14,7 @@ export interface Budget {
   total_remaining: number
   percentage: number
   budget_type: string
+  budget_date?: string
   category_id: number | null
   category_name: string | null
   created_at: string
@@ -25,6 +26,7 @@ export interface BudgetCreate {
   period: "monthly" | "weekly" | "yearly"
   total_limit: number
   budget_type?: string
+  budget_date?: string
   category_id?: number | null
   category_name?: string
 }
@@ -34,6 +36,7 @@ export interface BudgetUpdate {
   period?: "monthly" | "weekly" | "yearly" | string
   total_limit?: number
   budget_type?: string
+  budget_date?: string
   category_id?: number | null
   category_name?: string
 }
@@ -81,7 +84,7 @@ export function useCreateBudget(options?: { silent?: boolean }) {
       toast.dismiss(TOAST_ID_CREATE_BUDGET)
       console.error('[hook:budgets]', err)
       if (!options?.silent) {
-        toast.error(err.message || "Erro ao criar orçamento", { id: TOAST_ID_CREATE_BUDGET })
+        toast.error("Não foi possível criar o orçamento. Tente novamente.", { id: TOAST_ID_CREATE_BUDGET })
       }
     },
   })
@@ -105,7 +108,7 @@ export function useUpdateBudget(options?: { silent?: boolean }) {
       toast.dismiss(TOAST_ID_UPDATE_BUDGET)
       console.error('[hook:budgets]', err)
       if (!options?.silent) {
-        toast.error(err.message || "Erro ao atualizar orçamento", { id: TOAST_ID_UPDATE_BUDGET })
+        toast.error("Não foi possível atualizar o orçamento. Tente novamente.", { id: TOAST_ID_UPDATE_BUDGET })
       }
     },
   })
@@ -129,7 +132,7 @@ export function useDeleteBudget(options?: { silent?: boolean }) {
       toast.dismiss(TOAST_ID_DELETE_BUDGET)
       console.error('[hook:budgets]', err)
       if (!options?.silent) {
-        toast.error(err.message || "Erro ao excluir orçamento", { id: TOAST_ID_DELETE_BUDGET })
+        toast.error("Não foi possível excluir o orçamento. Tente novamente.", { id: TOAST_ID_DELETE_BUDGET })
       }
     },
   })

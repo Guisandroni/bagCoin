@@ -178,4 +178,46 @@ describe("release dashboard adapter", () => {
       },
     ])
   })
+
+  it("does not expose negative available balance in release dashboard summary", () => {
+    const summary = summaryToDashboardSummary(
+      {
+        balance: -4884.9,
+        total_income: 0,
+        total_expenses: 4884.9,
+        transaction_count: 1,
+        categories: [],
+        recent_transactions: [],
+      },
+      [],
+      []
+    )
+
+    expect(summary.totalBalance).toBe(0)
+    expect(summary.income).toBe(0)
+    expect(summary.expenses).toBe(4884.9)
+  })
+
+  it("preserves hex colors from transaction summary categories", () => {
+    const summary = summaryToDashboardSummary(
+      {
+        balance: 1000,
+        total_income: 2000,
+        total_expenses: 1000,
+        transaction_count: 2,
+        categories: [
+          { name: "Supermercado", amount: 700, color: "#FFC107" },
+          { name: "Farmácia", amount: 300, color: "#FF1493" },
+        ],
+        recent_transactions: [],
+      },
+      [],
+      []
+    )
+
+    expect(summary.categoryBreakdown).toEqual([
+      { name: "Supermercado", percentage: 70, amount: 700, color: "#FFC107", emoji: "🛒" },
+      { name: "Farmácia", percentage: 30, amount: 300, color: "#FF1493", emoji: "❤️" },
+    ])
+  })
 })

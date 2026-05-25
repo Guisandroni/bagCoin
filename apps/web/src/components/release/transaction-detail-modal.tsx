@@ -77,9 +77,6 @@ function ReleaseTransactionDetailModalContent({
   const [amount, setAmount] = useState(formatCurrency(transaction.amount).replace("R$", "").trim())
   const [date, setDate] = useState(transaction.transactionDate ?? "")
   const [isRecurring, setIsRecurring] = useState(transaction.isRecurring ?? false)
-  const [recurrenceFrequency, setRecurrenceFrequency] = useState<"weekly" | "monthly" | "yearly">(
-    transaction.recurrenceFrequency ?? "monthly"
-  )
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
   const selectedIsIncome = transaction.type === "receita"
@@ -102,7 +99,7 @@ function ReleaseTransactionDetailModalContent({
       category_name: selectedCategory?.name || transaction.category,
       transaction_date: date || transaction.transactionDate || getTodayIso(),
       is_recurring: isRecurring,
-      recurrence_frequency: isRecurring ? recurrenceFrequency : undefined,
+      recurrence_frequency: isRecurring ? "monthly" : undefined,
     })
     setIsEditing(false)
   }
@@ -127,7 +124,7 @@ function ReleaseTransactionDetailModalContent({
       />
 
       <div className="fixed bottom-0 left-1/2 z-[60] flex w-[min(100%,28rem)] -translate-x-1/2 justify-center">
-        <div className="w-full max-w-[480px] rounded-t-[12px] bg-[var(--rls-surface-container-lowest)] shadow-sheet">
+        <div className="flex h-dvh w-full max-w-[480px] flex-col rounded-t-[12px] bg-[var(--rls-surface-container-lowest)] shadow-sheet">
           <div className="flex justify-center pb-2 pt-3">
             <div className="h-1 w-10 rounded-full bg-[var(--rls-outline-variant)]" />
           </div>
@@ -146,7 +143,7 @@ function ReleaseTransactionDetailModalContent({
             </button>
           </div>
 
-          <div className="flex max-h-[68dvh] flex-col gap-[var(--rls-stack-gap-md)] overflow-y-auto px-[var(--rls-inline-padding-md)] py-[var(--rls-stack-gap-md)]">
+          <div className="flex min-h-0 flex-1 flex-col gap-[var(--rls-stack-gap-md)] overflow-y-auto px-[var(--rls-inline-padding-md)] py-[var(--rls-stack-gap-md)]">
             <div className="flex items-center gap-4 rounded-[var(--rls-radius)] bg-[var(--rls-surface-container)] p-4">
               <div
                 className={cn(
@@ -222,9 +219,7 @@ function ReleaseTransactionDetailModalContent({
 
                 <RecurringTransactionFields
                   isRecurring={isRecurring}
-                  recurrenceFrequency={recurrenceFrequency}
                   onRecurringChange={setIsRecurring}
-                  onFrequencyChange={setRecurrenceFrequency}
                 />
 
                 <ReleaseCategoryPicker
@@ -232,6 +227,7 @@ function ReleaseTransactionDetailModalContent({
                   categories={filteredCategories}
                   selectedCategory={selectedCategory}
                   onSelect={setSelectedCategory}
+                  collapsible
                 />
 
                 <div className="grid grid-cols-2 gap-3">
@@ -345,14 +341,10 @@ function formatRecurrence(
 
 function RecurringTransactionFields({
   isRecurring,
-  recurrenceFrequency,
   onRecurringChange,
-  onFrequencyChange,
 }: {
   isRecurring: boolean
-  recurrenceFrequency: "weekly" | "monthly" | "yearly"
   onRecurringChange: (value: boolean) => void
-  onFrequencyChange: (value: "weekly" | "monthly" | "yearly") => void
 }) {
   return (
     <div className="flex flex-col gap-3 rounded-[var(--rls-radius)] bg-[var(--rls-surface-container-lowest)] p-3">
@@ -368,27 +360,9 @@ function RecurringTransactionFields({
         />
       </label>
       {isRecurring ? (
-        <div className="grid grid-cols-3 gap-1 rounded-[var(--rls-radius)] bg-[var(--rls-surface-container)] p-1">
-          {[
-            { label: "Semanal", value: "weekly" },
-            { label: "Mensal", value: "monthly" },
-            { label: "Anual", value: "yearly" },
-          ].map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => onFrequencyChange(option.value as "weekly" | "monthly" | "yearly")}
-              className={cn(
-                "h-10 rounded-[var(--rls-radius)] text-xs font-semibold transition-colors",
-                recurrenceFrequency === option.value
-                  ? "bg-[var(--rls-primary-container)] text-white shadow-sm"
-                  : "text-[var(--rls-on-surface-variant)]"
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <p className="rls-text-body-md rounded-[var(--rls-radius)] bg-[var(--rls-surface-container)] px-4 py-3 text-[var(--rls-on-surface-variant)]">
+          Será repetida mensalmente.
+        </p>
       ) : null}
     </div>
   )
@@ -406,5 +380,9 @@ function formatFullDate(value: string | undefined, fallback: string): string {
 }
 
 function getTodayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, "0")
+  const day = String(today.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
 }

@@ -66,7 +66,7 @@ export function useCreateConversation() {
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_CREATE_CONVERSATION)
       console.error('[hook:conversations]', err)
-      toast.error(err.message || "Erro ao criar conversa", { id: TOAST_ID_CREATE_CONVERSATION })
+      toast.error("Não foi possível criar a conversa. Tente novamente.", { id: TOAST_ID_CREATE_CONVERSATION })
     },
   })
 }

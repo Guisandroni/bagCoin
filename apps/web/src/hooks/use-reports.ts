@@ -68,7 +68,7 @@ export function useCreateReport() {
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_CREATE_REPORT)
       console.error('[hook:reports]', err)
-      toast.error(err.message || "Erro ao gerar relatório", { id: TOAST_ID_CREATE_REPORT })
+      toast.error("Não foi possível gerar o relatório. Tente novamente.", { id: TOAST_ID_CREATE_REPORT })
     },
   })
 }
@@ -88,7 +88,7 @@ export function useDeleteReport() {
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_DELETE_REPORT)
       console.error('[hook:reports]', err)
-      toast.error(err.message || "Erro ao excluir relatório", { id: TOAST_ID_DELETE_REPORT })
+      toast.error("Não foi possível excluir o relatório. Tente novamente.", { id: TOAST_ID_DELETE_REPORT })
     },
   })
 }
@@ -112,7 +112,7 @@ export function useDownloadReport() {
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_DOWNLOAD_REPORT)
       console.error('[hook:reports]', err)
-      toast.error(err.message || "Erro ao baixar relatório", { id: TOAST_ID_DOWNLOAD_REPORT })
+      toast.error("Não foi possível baixar o relatório. Tente novamente.", { id: TOAST_ID_DOWNLOAD_REPORT })
     },
   })
 }

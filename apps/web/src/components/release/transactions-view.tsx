@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { ChevronLeft, ChevronRight, Search, X } from "lucide-react"
 import { FilterChips } from "./filter-chips"
 import { PillInput } from "./pill-input"
@@ -17,12 +17,12 @@ const MONTH_OPTIONS = Array.from({ length: 12 }, (_, month) => ({
   value: month,
   label: new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(new Date(2026, month, 1)),
 }))
-const STATIC_CURRENT_DATE_FALLBACK = new Date(2026, 0, 1)
+const PRERENDER_SAFE_DATE = new Date(2000, 0, 1)
 
 interface TransactionsViewProps {
   transactions: ReleaseTransaction[]
-  totalSpent: number
-  totalReceived: number
+  totalSpent?: number
+  totalReceived?: number
   navItems: ReleaseNavItem[]
   onNavigate: (href: string) => void
   onSearch?: (query: string) => void
@@ -33,8 +33,6 @@ interface TransactionsViewProps {
 
 export function TransactionsView({
   transactions,
-  totalSpent,
-  totalReceived,
   navItems,
   onNavigate,
   onSelectTransaction,
@@ -42,7 +40,7 @@ export function TransactionsView({
   currentDate,
 }: TransactionsViewProps) {
   const [resolvedCurrentDate, setResolvedCurrentDate] = useState(
-    () => currentDate ?? STATIC_CURRENT_DATE_FALLBACK
+    () => currentDate ?? PRERENDER_SAFE_DATE
   )
   const [activeFilter, setActiveFilter] = useState<ReleaseFilterPeriod>("todo")
   const [typeFilter, setTypeFilter] = useState<ReleaseTransactionTypeFilter>("all")
@@ -52,6 +50,14 @@ export function TransactionsView({
   const [calendarMonth, setCalendarMonth] = useState(
     () => new Date(resolvedCurrentDate.getFullYear(), resolvedCurrentDate.getMonth(), 1)
   )
+
+  useEffect(() => {
+    const nextDate = currentDate ?? new Date()
+    queueMicrotask(() => {
+      setResolvedCurrentDate(nextDate)
+      setCalendarMonth(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1))
+    })
+  }, [currentDate])
 
   const filterOptions: { label: string; value: ReleaseFilterPeriod }[] = [
     { label: "Todas", value: "todo" },
@@ -75,6 +81,14 @@ export function TransactionsView({
     if (!matchesType(tx.type, typeFilter)) return false
     return matchesPeriod(tx.transactionDate, activeFilter, resolvedCurrentDate, selectedCalendarDate)
   })
+
+  const totalFilteredExpenses = filteredTransactions
+    .filter((tx) => tx.type === "despesa")
+    .reduce((sum, tx) => sum + Math.abs(tx.amount), 0)
+
+  const totalFilteredIncome = filteredTransactions
+    .filter((tx) => tx.type === "receita")
+    .reduce((sum, tx) => sum + Math.abs(tx.amount), 0)
 
   const transactionDates = new Set(
     transactions
@@ -117,13 +131,19 @@ export function TransactionsView({
               options={filterOptions}
               selected={activeFilter}
               onChange={(value) => {
+                let nextSelectedDate = currentDate ?? resolvedCurrentDate
                 if (!currentDate) {
                   const nextDate = new Date()
+                  nextSelectedDate = nextDate
                   setResolvedCurrentDate(nextDate)
                   setCalendarMonth(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1))
                 }
                 setActiveFilter(value)
-                if (value === "calendar") setCalendarOpen(true)
+                if (value === "calendar") {
+                  const todayIso = toIsoDate(nextSelectedDate)
+                  setSelectedCalendarDate((selected) => selected || todayIso)
+                  setCalendarOpen(true)
+                }
               }}
             />
           </div>
@@ -141,15 +161,15 @@ export function TransactionsView({
         <div className="bg-[var(--rls-surface-container-lowest)] rounded-[var(--rls-radius-lg)] p-[var(--rls-inline-padding-md)] shadow-sm">
           <div className="grid grid-cols-2 divide-x divide-[var(--rls-outline-variant)]">
             <div className="flex flex-col items-center gap-1 pr-4">
-              <span className="rls-text-label-lg text-[var(--rls-on-surface-variant)]">Total Gasto</span>
+              <span className="rls-text-label-lg text-[var(--rls-on-surface-variant)]">Total Despesas</span>
               <span className="rls-text-headline-sm text-[var(--rls-error)]">
-                {formatCurrency(totalSpent)}
+                {formatCurrency(totalFilteredExpenses)}
               </span>
             </div>
             <div className="flex flex-col items-center gap-1 pl-4">
-              <span className="rls-text-label-lg text-[var(--rls-on-surface-variant)]">Total Recebido</span>
+              <span className="rls-text-label-lg text-[var(--rls-on-surface-variant)]">Total Receitas</span>
               <span className="rls-text-headline-sm text-[var(--rls-secondary)]">
-                {formatCurrency(totalReceived)}
+                {formatCurrency(totalFilteredIncome)}
               </span>
             </div>
           </div>
@@ -272,7 +292,9 @@ function matchesPeriod(
     return diffMs >= 0 && diffMs <= 6 * 24 * 60 * 60 * 1000
   }
 
-  if (filter === "month") return true
+  if (filter === "month") {
+    return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth()
+  }
 
   return selectedCalendarDate ? transactionDate === selectedCalendarDate : true
 }

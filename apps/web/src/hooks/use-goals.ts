@@ -75,7 +75,7 @@ export function useCreateGoal(options?: { silent?: boolean }) {
       toast.dismiss(TOAST_ID_CREATE_GOAL)
       console.error('[hook:goals]', err)
       if (!options?.silent) {
-        toast.error(err.message || "Erro ao criar meta", { id: TOAST_ID_CREATE_GOAL })
+        toast.error("Não foi possível criar a meta. Tente novamente.", { id: TOAST_ID_CREATE_GOAL })
       }
     },
   })
@@ -99,7 +99,7 @@ export function useUpdateGoal(options?: { silent?: boolean }) {
       toast.dismiss(TOAST_ID_UPDATE_GOAL)
       console.error('[hook:goals]', err)
       if (!options?.silent) {
-        toast.error(err.message || "Erro ao atualizar meta", { id: TOAST_ID_UPDATE_GOAL })
+        toast.error("Não foi possível atualizar a meta. Tente novamente.", { id: TOAST_ID_UPDATE_GOAL })
       }
     },
   })
@@ -123,7 +123,7 @@ export function useDeleteGoal(options?: { silent?: boolean }) {
       toast.dismiss(TOAST_ID_DELETE_GOAL)
       console.error('[hook:goals]', err)
       if (!options?.silent) {
-        toast.error(err.message || "Erro ao excluir meta", { id: TOAST_ID_DELETE_GOAL })
+        toast.error("Não foi possível excluir a meta. Tente novamente.", { id: TOAST_ID_DELETE_GOAL })
       }
     },
   })

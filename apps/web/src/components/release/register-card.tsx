@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { GoogleLogin } from "@react-oauth/google";
+// import { GoogleLogin } from "@react-oauth/google";
 import { User, Mail, Lock, LockKeyhole, ArrowRight } from "lucide-react";
 import { registerSchema } from "@/lib/validations";
 import { PillInput } from "./pill-input";
-import { AuthCard, AuthHeader, AuthDivider, AuthFooter } from "./auth-card";
+import { AuthCard, AuthHeader, AuthFooter } from "./auth-card";
+// import { AuthDivider } from "./auth-card";
 import { ToastBanner } from "./toast-banner";
 
 type PasswordChecks = {
@@ -55,7 +56,7 @@ interface RegisterCardProps {
 
 export function RegisterCard({
   onRegister,
-  onGoogleRegister,
+  // onGoogleRegister,
   onLoginClick,
   isLoading,
   errorMessage,
@@ -69,8 +70,8 @@ export function RegisterCard({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [validationToast, setValidationToast] = useState<string | null>(null);
-  const [googleError, setGoogleError] = useState<string | null>(null);
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
+  // const [googleError, setGoogleError] = useState<string | null>(null);
+  // const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
   const mergedErrors = { ...fieldErrors, ...errors };
   const passwordChecks = getPasswordChecks(password);
 
@@ -116,11 +117,11 @@ export function RegisterCard({
   return (
     <div className="rls min-h-dvh bg-[var(--rls-background)] flex flex-col items-center justify-center p-[var(--rls-container-margin)]">
       <ToastBanner
-        isOpen={!!(errorMessage || googleError || validationToast)}
-        message={errorMessage || googleError || validationToast || ""}
+        isOpen={!!(errorMessage || validationToast)}
+        message={errorMessage || validationToast || ""}
         variant="error"
         onClose={() => {
-          setGoogleError(null);
+          // setGoogleError(null);
           setValidationToast(null);
           onDismissError?.();
         }}
@@ -230,6 +231,7 @@ export function RegisterCard({
           </button>
         </form>
 
+        {/*
         <AuthDivider text="ou cadastre-se com" />
 
         {googleClientId ? (
@@ -262,6 +264,7 @@ export function RegisterCard({
             Google indisponível
           </button>
         )}
+        */}
 
         <AuthFooter
           text="Já tem uma conta?"

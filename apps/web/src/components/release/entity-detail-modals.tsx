@@ -17,6 +17,7 @@ type BudgetSaveInput = {
   category_id?: number | null
   category_name: string
   period: "monthly" | "weekly" | "yearly"
+  budget_date: string
   total_limit: number
   budget_type: "category"
 }
@@ -95,6 +96,7 @@ function BudgetContent({
   const [selectedCategory, setSelectedCategory] = useState<ReleaseCategory | null>(currentCategory ?? null)
   const [period, setPeriod] = useState<"monthly" | "weekly" | "yearly">(normalizePeriod(budget.period))
   const [limit, setLimit] = useState(formatCurrency(budget.total).replace("R$", "").trim())
+  const [budgetDate, setBudgetDate] = useState(budget.budgetDate ?? getTodayIso())
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const remainingLabel = budget.remaining < 0
     ? `${formatCurrency(Math.abs(budget.remaining))} acima do limite`
@@ -107,6 +109,7 @@ function BudgetContent({
       category_id: selectedCategory.id,
       category_name: selectedCategory.name,
       period,
+      budget_date: budgetDate || getTodayIso(),
       total_limit: parseMoneyInput(limit),
       budget_type: "category",
     })
@@ -145,23 +148,12 @@ function BudgetContent({
             categories={categories}
             selectedCategory={selectedCategory}
             onSelect={setSelectedCategory}
+            collapsible
           />
 
-          <div className="grid grid-cols-3 gap-2 rounded-[var(--rls-radius-pill)] bg-[var(--rls-surface-container)] p-1">
-            {(["monthly", "weekly", "yearly"] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => setPeriod(option)}
-                className={cn(
-                  "h-11 rounded-[var(--rls-radius-pill)] rls-text-label-lg transition-colors",
-                  period === option ? "bg-[var(--rls-primary-container)] text-white" : "text-[var(--rls-on-surface-variant)]"
-                )}
-              >
-                {periodLabel(option)}
-              </button>
-            ))}
-          </div>
+          <p className="rls-text-body-md rounded-[var(--rls-radius)] bg-[var(--rls-surface-container)] px-4 py-3 text-[var(--rls-on-surface-variant)]">
+            Orçamento mensal.
+          </p>
 
           <label className="flex flex-col gap-2">
             <span className="rls-text-label-lg text-[var(--rls-on-surface-variant)]">Limite</span>
@@ -173,11 +165,18 @@ function BudgetContent({
               className="h-14 rounded-[var(--rls-radius-pill)] border-none bg-[var(--rls-surface-container)] px-5 text-base"
             />
           </label>
+
+          <ReleaseDatePicker
+            label="Data"
+            value={budgetDate}
+            onChange={setBudgetDate}
+          />
         </div>
       ) : (
         <DetailRows
           rows={[
             { icon: Tag, label: "Categoria", value: budget.category },
+            { icon: CalendarDays, label: "Data", value: formatDate(budget.budgetDate) },
             { icon: CalendarDays, label: "Período", value: periodLabel(normalizePeriod(budget.period)) },
             { icon: WalletCards, label: "Restante", value: remainingLabel },
           ]}
@@ -256,6 +255,7 @@ function GoalContent({
   const [status, setStatus] = useState<"active" | "completed" | "cancelled">(goal.status ?? "active")
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const percentage = goal.target > 0 ? Math.round((goal.current / goal.target) * 100) : 0
+  const statusMeta = getGoalStatusMeta(status)
 
   const handleSave = async () => {
     await onSave({
@@ -289,9 +289,9 @@ function GoalContent({
       <SummaryRow
         iconName={goal.name}
         title={goal.name}
-        subtitle={`${formatCurrency(goal.current)} / ${formatCurrency(goal.target)}`}
+        subtitle={`${statusMeta.label} · ${formatCurrency(goal.current)} / ${formatCurrency(goal.target)}`}
         value={`${percentage}%`}
-        valueClassName="text-[var(--rls-primary-container)]"
+        valueClassName={statusMeta.valueClassName}
       />
 
       {isEditing ? (
@@ -306,19 +306,15 @@ function GoalContent({
             value={deadline}
             onChange={setDeadline}
           />
-          <select
+          <GoalStatusPicker
             value={status}
-            onChange={(event) => setStatus(event.target.value as typeof status)}
-            className="h-14 rounded-[var(--rls-radius-pill)] border-none bg-[var(--rls-surface-container)] px-4 text-base text-[var(--rls-on-surface)] outline-none"
-          >
-            <option value="active">Ativa</option>
-            <option value="completed">Concluída</option>
-            <option value="cancelled">Cancelada</option>
-          </select>
+            onChange={setStatus}
+          />
         </div>
       ) : (
         <DetailRows
           rows={[
+            { icon: Target, label: "Status", value: statusMeta.label },
             { icon: Target, label: "Alvo", value: formatCurrency(goal.target) },
             { icon: WalletCards, label: "Atual", value: formatCurrency(goal.current) },
             { icon: CalendarDays, label: "Prazo", value: formatDate(goal.deadline) },
@@ -499,7 +495,7 @@ function ReleaseEntitySheet({
         onClick={onClose}
       />
       <div className="fixed bottom-0 left-1/2 z-[60] flex w-[min(100%,28rem)] -translate-x-1/2 justify-center">
-        <div className="w-full max-w-[480px] rounded-t-[12px] bg-[var(--rls-surface-container-lowest)] shadow-sheet">
+        <div className="flex h-dvh w-full max-w-[480px] flex-col rounded-t-[12px] bg-[var(--rls-surface-container-lowest)] shadow-sheet">
           <div className="flex justify-center pb-2 pt-3">
             <div className="h-1 w-10 rounded-full bg-[var(--rls-outline-variant)]" />
           </div>
@@ -514,7 +510,7 @@ function ReleaseEntitySheet({
               <X className="h-6 w-6" />
             </button>
           </div>
-          <div className="flex max-h-[68dvh] flex-col gap-[var(--rls-stack-gap-md)] overflow-y-auto px-[var(--rls-inline-padding-md)] py-[var(--rls-stack-gap-md)]">
+          <div className="flex min-h-0 flex-1 flex-col gap-[var(--rls-stack-gap-md)] overflow-y-auto px-[var(--rls-inline-padding-md)] py-[var(--rls-stack-gap-md)]">
             {children}
           </div>
           <div className="border-t border-[var(--rls-outline-variant)] px-[var(--rls-inline-padding-md)] py-4">
@@ -569,6 +565,44 @@ function DetailRows({
           <span className="rls-text-body-lg text-right text-[var(--rls-on-surface)]">{item.value}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+function GoalStatusPicker({
+  value,
+  onChange,
+}: {
+  value: "active" | "completed" | "cancelled"
+  onChange: (value: "active" | "completed" | "cancelled") => void
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="rls-text-label-lg text-[var(--rls-on-surface-variant)]">Status</span>
+      <div className="grid grid-cols-1 gap-2">
+        {(["active", "completed", "cancelled"] as const).map((option) => {
+          const meta = getGoalStatusMeta(option)
+          const selected = value === option
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onChange(option)}
+              className={cn(
+                "flex min-h-14 items-center justify-between rounded-[var(--rls-radius)] border px-4 py-3 text-left transition-colors",
+                selected
+                  ? `${meta.selectedClassName} border-transparent`
+                  : "border-[var(--rls-outline-variant)] bg-[var(--rls-surface-container-lowest)] text-[var(--rls-on-surface)]"
+              )}
+            >
+              <span className="rls-text-title-md">{meta.label}</span>
+              <span className={cn("rls-text-label-md rounded-[var(--rls-radius-pill)] px-2 py-0.5", meta.badgeClassName)}>
+                {meta.hint}
+              </span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -701,4 +735,40 @@ function formatDate(value: string | undefined): string {
     month: "long",
     year: "numeric",
   }).format(date)
+}
+
+function getGoalStatusMeta(status: "active" | "completed" | "cancelled") {
+  if (status === "completed") {
+    return {
+      label: "Concluída",
+      hint: "finalizada",
+      valueClassName: "text-[var(--rls-secondary)]",
+      badgeClassName: "bg-[var(--rls-secondary-container)] text-[var(--rls-secondary)]",
+      selectedClassName: "bg-[var(--rls-secondary-container)] text-[var(--rls-secondary)]",
+    }
+  }
+  if (status === "cancelled") {
+    return {
+      label: "Cancelada",
+      hint: "pausada",
+      valueClassName: "text-[var(--rls-error)]",
+      badgeClassName: "bg-[var(--rls-error-container)] text-[var(--rls-error)]",
+      selectedClassName: "bg-[var(--rls-error-container)] text-[var(--rls-error)]",
+    }
+  }
+  return {
+    label: "Ativa",
+    hint: "em andamento",
+    valueClassName: "text-[var(--rls-primary-container)]",
+    badgeClassName: "bg-[var(--rls-primary-container)]/10 text-[var(--rls-primary-container)]",
+    selectedClassName: "bg-[var(--rls-primary-container)]/10 text-[var(--rls-primary-container)]",
+  }
+}
+
+function getTodayIso(): string {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, "0")
+  const day = String(today.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
 }
