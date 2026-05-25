@@ -303,6 +303,89 @@ def resolve_financial_query_period(
     )
 
 
+# ── LLM-based period resolution (fallback) ────────────────────────────
+
+_PERIOD_LLM_PROMPT = """Você é um parser de datas. Dada uma mensagem e a data de hoje, extraia o período financeiro.
+
+Data de hoje: {today}
+
+Responda APENAS JSON: {{"start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "label": "descrição"}}
+
+Exemplos:
+- "mes 2" (hoje=2026-05-25) → {{"start_date": "2026-02-01", "end_date": "2026-02-28", "label": "fevereiro de 2026"}}
+- "mes 02 de 2025" → {{"start_date": "2025-02-01", "end_date": "2025-02-28", "label": "fevereiro de 2025"}}
+- "de janeiro a março" (hoje=2026-05-25) → {{"start_date": "2026-01-01", "end_date": "2026-03-31", "label": "janeiro a março de 2026"}}
+- "últimos 3 meses" (hoje=2026-05-25) → {{"start_date": "2026-02-25", "end_date": "2026-05-25", "label": "últimos 3 meses"}}
+- "mes 12 de 2025" → {{"start_date": "2025-12-01", "end_date": "2025-12-31", "label": "dezembro de 2025"}}
+
+Regras:
+- Mês por número ("mes 2", "mês 02") → mês daquele número no ano atual ou especificado.
+- Use último dia correto do mês para end_date (28, 29, 30 ou 31).
+- Se não conseguir: {{"start_date": null, "end_date": null, "label": null}}"""
+
+
+def _has_period_indicators(msg_norm: str) -> bool:
+    """Check if message has period indicators the deterministic parser might have missed."""
+    patterns = [
+        r"mes\s*\d+",
+        r"de\s+\w+\s+a\s+\w+",
+        r"ultimos?\s+\d+\s+mes",
+        r"trimestre",
+        r"semestre",
+    ]
+    return any(re.search(p, msg_norm) for p in patterns)
+
+
+def resolve_period_with_llm(
+    message: str,
+    *,
+    today: date | None = None,
+) -> FinancialQueryPeriod | None:
+    """Use LLM to resolve a period from natural language. Returns None on failure."""
+    today = today or _current_report_date()
+    llm = get_llm(temperature=0)
+    if not llm:
+        return None
+    try:
+        prompt = _PERIOD_LLM_PROMPT.format(today=today.isoformat())
+        messages = [
+            SystemMessage(content=prompt),
+            HumanMessage(content=message),
+        ]
+        response = llm.invoke(messages)
+        result = JsonOutputParser().parse(response.content)
+        start_str = result.get("start_date")
+        end_str = result.get("end_date")
+        label = result.get("label")
+        if not start_str or not end_str or not label:
+            return None
+        return FinancialQueryPeriod(
+            start=date.fromisoformat(start_str),
+            end=date.fromisoformat(end_str),
+            label=label,
+        )
+    except Exception as e:
+        logger.warning(f"[resolve_period_with_llm] Failed: {e}")
+        return None
+
+
+def resolve_period_smart(
+    message: str,
+    *,
+    today: date | None = None,
+) -> FinancialQueryPeriod:
+    """Smart period resolution: deterministic parser first, LLM fallback for unrecognized patterns."""
+    today = today or _current_report_date()
+    result = resolve_financial_query_period(message, today=today)
+    if result.label == "este mês":
+        msg_norm = normalize_query_text(message)
+        if _has_period_indicators(msg_norm):
+            llm_result = resolve_period_with_llm(message, today=today)
+            if llm_result is not None:
+                return llm_result
+    return result
+
+
 def get_date_filter(msg_lower: str) -> str | None:
     """Return WHERE date clause based on the user's message."""
     return resolve_financial_query_period(msg_lower).sql_clause
@@ -327,7 +410,7 @@ def _period_label(date_clause: str) -> str:
 
 def build_financial_transactions_query(message: str) -> tuple[str, str, FinancialQueryPeriod]:
     """Build the canonical SQL used by reports to fetch financial transactions."""
-    period = resolve_financial_query_period(message)
+    period = resolve_period_smart(message)
     date_sql = f" AND {period.sql_clause}" if period.sql_clause else ""
     sql = (
         "SELECT "
@@ -361,7 +444,7 @@ def get_fallback_query(message: str, phone_number: str) -> tuple[str | None, str
     msg_lower = message.lower()
     msg_norm = normalize_query_text(msg_lower)
     user_filter = "user_id = (SELECT id FROM users WHERE phone_number = :phone_number)"
-    period = resolve_financial_query_period(message)
+    period = resolve_period_smart(message)
     date_clause = period.sql_clause
     date_sql = f" AND {date_clause}" if date_clause else ""
     description_period = f" ({period.label})" if period.label else ""

@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.agents.persistence import get_or_create_user
-from app.agents.text_to_sql import fetch_financial_transactions_for_query, resolve_financial_query_period
+from app.agents.text_to_sql import fetch_financial_transactions_for_query, resolve_period_smart
 from app.db.models.budget import Budget
 from app.db.models.enums import GoalStatus
 from app.db.models.goal import Goal
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 def _get_period_from_message(message: str) -> tuple:
     """Extrai período de início e fim baseado na mensagem do usuário."""
-    period = resolve_financial_query_period(message, today=report_now().date())
+    period = resolve_period_smart(message, today=report_now().date())
     start = period.start or report_now().date()
     end = period.end or report_now().date()
     period_start = datetime.combine(start, datetime.min.time(), tzinfo=report_now().tzinfo)
