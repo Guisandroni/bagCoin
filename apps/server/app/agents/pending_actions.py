@@ -232,6 +232,7 @@ def image_transaction_type_decision(message: str) -> Literal["INCOME", "EXPENSE"
 def has_pending_confirmation_message(phone_number: str, message: str) -> bool:
     pending = load_pending_action(phone_number)
     if not pending:
+        logger.debug("[pending] No pending action for phone=%s msg=%s", phone_number, message[:50])
         return False
     if pending.get("action") == "clarify_image_transaction_type":
         return (
@@ -243,7 +244,10 @@ def has_pending_confirmation_message(phone_number: str, message: str) -> bool:
             pending_confirmation_decision(message) is not None
             or _looks_like_register_transaction_correction(message)
         )
-    return pending_confirmation_decision(message) is not None
+    result = pending_confirmation_decision(message) is not None
+    if not result:
+        logger.debug("[pending] Message not recognized as confirmation: phone=%s msg=%s", phone_number, message[:50])
+    return result
 
 
 def handle_pending_confirmation(phone_number: str, message: str) -> str | None:
@@ -280,6 +284,7 @@ def handle_pending_confirmation(phone_number: str, message: str) -> str | None:
             clear_pending_action(phone_number)
             return f"Nao consegui preparar a confirmacao dessa imagem: {exc}"
     decision = pending_confirmation_decision(message)
+    logger.info("[pending] Confirmation decision=%s action=%s phone=%s msg=%s", decision, pending.get("action"), phone_number, message[:50])
     if decision == "cancel":
         clear_pending_action(phone_number)
         return "Combinado, nao executei essa acao."
@@ -517,6 +522,7 @@ def _find_transaction_id(phone_number: str, description: str | None = None) -> i
 def execute_pending_action(phone_number: str, pending: dict[str, Any]) -> str:
     action = pending.get("action")
     params = dict(pending.get("params") or {})
+    logger.info("[pending] Executing action=%s phone=%s params_keys=%s", action, phone_number, list(params.keys()))
 
     if action == "register_transaction":
         state = {
@@ -527,9 +533,12 @@ def execute_pending_action(phone_number: str, pending: dict[str, Any]) -> str:
         }
         result = save_transaction(state)
         if result.get("error"):
+            logger.error("[pending] Transaction save failed: %s", result["error"])
             return str(result["error"])
         if not result.get("transaction_id"):
+            logger.error("[pending] Transaction save returned no transaction_id")
             return "Nao consegui confirmar a persistencia da transacao no banco. Tente novamente."
+        logger.info("[pending] Transaction saved: id=%s", result["transaction_id"])
         message = resp.transaction_registered(
             params.get("type", "EXPENSE"),
             float(params.get("amount") or 0),
