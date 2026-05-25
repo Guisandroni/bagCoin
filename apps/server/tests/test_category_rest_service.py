@@ -2,12 +2,10 @@
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4
 
 import pytest
 
 from app.db.models.category import Category
-from app.db.models.phone_user import PhoneUser
 from app.core.exceptions import ValidationError
 from app.services.category_rest import (
     create_category_for_user,
@@ -31,7 +29,7 @@ def _result_many(values):
 @pytest.mark.anyio
 async def test_create_category_for_web_user_creates_phone_profile_and_category():
     user = SimpleNamespace(
-        id=uuid4(),
+        id=10,
         phone_number="+5511999990001",
         full_name="Ana",
         email="ana@bagcoin.com",
@@ -49,18 +47,16 @@ async def test_create_category_for_web_user_creates_phone_profile_and_category()
     assert response is not None
     assert response["name"] == "Colecionáveis"
     assert response["type"] == "despesa"
-    assert db.add.call_count == 2
+    assert db.add.call_count == 1
 
 
 @pytest.mark.anyio
 async def test_create_category_for_web_user_returns_none_for_duplicate():
-    user = SimpleNamespace(id=uuid4(), phone_number="+5511999990001", full_name="Ana", email="ana")
-    phone_user = PhoneUser(id=10, phone_number=user.phone_number, merged_into_user_id=user.id)
+    user = SimpleNamespace(id=10, phone_number="+5511999990001", full_name="Ana", email="ana")
     category = Category(id=20, user_id=10, name="Transporte", is_default=False)
     db = AsyncMock()
     db.execute = AsyncMock(side_effect=[
-        _result_one(phone_user),
-        _result_one(category),
+        _result_many([category]),
     ])
 
     response = await create_category_for_user(db, user, "Transporte")
@@ -70,17 +66,14 @@ async def test_create_category_for_web_user_returns_none_for_duplicate():
 
 @pytest.mark.anyio
 async def test_list_categories_for_web_user_returns_authenticated_user_categories():
-    user = SimpleNamespace(id=uuid4(), phone_number="+5511999990001", full_name="Ana", email="ana")
-    phone_user = PhoneUser(id=10, phone_number=user.phone_number, merged_into_user_id=user.id)
+    user = SimpleNamespace(id=10, phone_number="+5511999990001", full_name="Ana", email="ana")
     categories = [
         Category(id=1, user_id=10, name="Alimentação", is_default=True),
         Category(id=2, user_id=10, name="Investimentos", is_default=False),
     ]
     db = AsyncMock()
     db.execute = AsyncMock(side_effect=[
-        _result_one(phone_user),
         _result_many(categories),
-        _result_one(phone_user),
         _result_many(categories),
         _result_one(None),
         _result_one(None),
@@ -100,12 +93,10 @@ async def test_list_categories_for_web_user_returns_authenticated_user_categorie
 
 @pytest.mark.anyio
 async def test_delete_category_blocks_system_default():
-    user = SimpleNamespace(id=uuid4(), phone_number="+5511999990001", full_name="Ana", email="ana")
-    phone_user = PhoneUser(id=10, phone_number=user.phone_number, merged_into_user_id=user.id)
+    user = SimpleNamespace(id=10, phone_number="+5511999990001", full_name="Ana", email="ana")
     category = Category(id=1, user_id=10, name="Alimentação", is_default=True)
     db = AsyncMock()
     db.execute = AsyncMock(side_effect=[
-        _result_one(phone_user),
         _result_one(category),
     ])
 

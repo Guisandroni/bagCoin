@@ -12,6 +12,15 @@ def test_parse_link_whatsapp_style():
     assert parse_link_token_from_message("#bagcoin link abcdefghijklmnop") == "abcdefghijklmnop"
 
 
+def test_parse_link_whatsapp_style_with_authentication_text():
+    assert (
+        parse_link_token_from_message(
+            "Enviando token para autenticacao. #bagcoin link abcdefghijklmnop"
+        )
+        == "abcdefghijklmnop"
+    )
+
+
 def test_parse_link_telegram_start():
     tok = "a" * 16
     assert parse_link_token_from_message(f"/start {tok}") == tok
@@ -24,7 +33,7 @@ def test_regex_minimum_length():
 
 def test_redact_hides_whatsapp_token():
     tok = "x" * 22
-    msg = f"#bagcoin link {tok} trailing"
+    msg = f"Enviando token para autenticacao. #bagcoin link {tok} trailing"
     out = redact_message_for_log(msg)
     assert "[REDACTED]" in out
     assert tok not in out

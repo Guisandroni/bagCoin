@@ -1,0 +1,33 @@
+{
+  "document_type": "receipt",
+  "is_financial": true,
+  "total_amount": 5.99,
+  "establishment": "Cruzeiro Automacao Comercial Ltda.",
+  "transaction": {
+    "date": "2014-04-01",
+    "description": "Nota fiscal Cruzeiro Automacao Comercial Ltda.",
+    "amount": 5.99,
+    "type": "EXPENSE",
+    "category": "Supermercado",
+    "source_format": "image"
+  },
+  "items": [
+    {
+      "description": "Pao Frances",
+      "quantity": 1,
+      "amount": 5.99
+    }
+  ],
+  "summary_must_contain": [
+    "Aqui estão os itens encontrados",
+    "Pao Frances",
+    "Valor total: R$ 5,99",
+    "Se estiver correto, posso importar esta transação."
+  ],
+  "summary_must_not_contain": [
+    "Revise os principais lançamentos",
+    "Todas são despesas",
+    "\"price\": R$",
+    "importar essas transações"
+  ]
+}

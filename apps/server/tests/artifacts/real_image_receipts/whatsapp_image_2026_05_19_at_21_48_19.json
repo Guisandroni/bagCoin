@@ -1,0 +1,73 @@
+{
+  "source_image": "/Users/guilherme/Downloads/bagCoin/examples/WhatsApp Image 2026-05-19 at 21.48.19.jpeg",
+  "gemini_structured": {
+    "is_receipt": true,
+    "tipo": "despesa",
+    "valor_total": 5.99,
+    "data": "2014-04-01",
+    "estabelecimento": "Cruzeiro Automacao Comercial Ltda",
+    "categoria": "Supermercado",
+    "descricao": "Pao Frances",
+    "itens": [
+      {
+        "descricao": "Pao Frances Kg",
+        "quantidade": 1.0,
+        "valor_total": 5.99
+      }
+    ],
+    "confianca": 0.9,
+    "observacoes": "NFC-e emitida em ambiente de teste - sem valor fiscal.",
+    "precisa_confirmar_tipo": false,
+    "raw_text": "Cruzeiro Automacao Comercial Ltda.\nCNPJ: 92.101.146/0001-41 IE:0290169135\nRua Balduino Darrigo, 1044, Santa Catarina,\nCaxias do Sul, RS\nDANFE NFC-e Documento Auxiliar da Nota Fiscal Eletronica para\nConsumidor Final - Via Estabelecimento\nNFC-e não permite aproveitamento de crédito de ICMS\nNFC-e EMITIDA EM AMBIENTE DE TESTE - SEM VALOR FISCAL\nItem EAN Descrição Qtde Un Vt Unit Vt Total\n1 0000002000107 Pao Frances Kg 5,99 5,99\n1,000\nKG\nQtd Total de Itens\nVALOR TOTAL R$\nDESCONTO TOTAL R$\nFORMA PAGAMENTO\nDinheiro\n5,99\n0,00\nVALOR PAGO R$\n5,99\nTributos Totais Incidentes (Lei Fed. 12.741/2012)\n0,01\nN: 000000139\nSérie:2\n01/04/2014 13:27:08\nConsulte pela Chave de Acesso em http://www.nfe.rs.gov.br\nCHAVE DE ACESSO\n4314 0492 1011 4600 0141 6500 2000 0001 3910 0000\nCONSUMIDOR\nConsumidor não informado\nConsulta via leitor de QR Code\nProtocolo de Autorização: 143140000383722\nOBRIGADO!\nPDV Cruzeiro Automação NFC-e\nversão 4.2.0.1\nCX:2 COO:000000139\nLJ:01 Oper:Cristiano L Fochesatti",
+    "total_amount": 5.99,
+    "labeled_total_amount": 5.99,
+    "payment_amount": 5.99,
+    "change_amount": 0.0,
+    "total_evidence": "VALOR TOTAL R$ 5,99\nVALOR PAGO R$ 5,99"
+  },
+  "bagcoin_document_analysis": {
+    "document_type": "receipt",
+    "is_financial": true,
+    "extraction_method": "multimodal_preextract+structured_receipt",
+    "confidence": 0.85,
+    "requires_confirmation": true,
+    "transactions": [
+      {
+        "date": "2014-04-01",
+        "description": "Pao Frances",
+        "amount": 5.99,
+        "type": "EXPENSE",
+        "category": "Supermercado",
+        "confidence": 0.75,
+        "raw": "Cruzeiro Automacao Comercial Ltda.\nCNPJ: 92.101.146/0001-41 IE:0290169135\nRua Balduino Darrigo, 1044, Santa Catarina,\nCaxias do Sul, RS\nDANFE NFC-e Documento Auxiliar da Nota Fiscal Eletronica para\nConsumidor Final - Via Estabelecimento\nNFC-e não permite aproveitamento de crédito de ICMS\nNFC-e EMITIDA EM AMBIENTE DE TESTE - SEM VALOR FISCAL\nItem EAN Descrição Qtde Un Vt Unit Vt Total\n1 0000002000107 Pao Frances Kg 5,99 5,99\n1,000\nKG\nQtd Total de Itens\nVALOR TOTAL R$\nDESCONTO TOTAL R$\nFORMA PAGAMENTO\nDinheiro\n5,99\n0,00\nVALOR PAGO R$\n5,99\nTributos Totais Incidentes (Lei Fed. 12.741/2012)\n0,01\nN: 000000139\nSérie:2\n01/04/2014 13:27:08\nConsulte pela Chave de Acesso em http://www.nfe.rs.gov.br\nCHAVE DE ACESSO\n4314 0492 1011 4600 0141 6500 2000 0001 3910 0000\nCONSUMIDOR\nConsumidor não informado\nConsulta via leitor de QR Code\nProtocolo de Autorização: 143140000383722\nOBRIGADO!\nPDV Cruzeiro Automação NFC-e\nversão 4.2.0.1\nCX:2 COO:000000139\nLJ:01 Oper:Cristiano L Fochesatti"
+      }
+    ],
+    "issues": [],
+    "summary": "1 transações encontradas: 0 receitas e 1 despesas.",
+    "period_start": null,
+    "period_end": null,
+    "totals": {
+      "income": 0,
+      "expense": 5.99,
+      "transactions": 1
+    },
+    "source": {
+      "filename": "WhatsApp Image 2026-05-19 at 21.48.19.jpeg",
+      "mimetype": "image/jpeg"
+    },
+    "total_amount": 5.99,
+    "establishment": "Cruzeiro Automacao Comercial Ltda"
+  },
+  "confirmation_summary": "Identifiquei uma despesa nesta imagem.\n\nEncontrei 1 itens neste documento.\n\nAqui estão os itens encontrados:\n- Itens não detalhados com segurança.\n\nValor total: R$ 5,99\n\nReceitas: R$ 0,00\nDespesas: R$ 5,99\n\nSe estiver correto, posso importar esta transação.",
+  "single_transaction_to_import": {
+    "date": "2014-04-01",
+    "description": "Pao Frances",
+    "amount": 5.99,
+    "type": "EXPENSE",
+    "category": "Supermercado",
+    "confidence": 0.75,
+    "raw": "Cruzeiro Automacao Comercial Ltda.\nCNPJ: 92.101.146/0001-41 IE:0290169135\nRua Balduino Darrigo, 1044, Santa Catarina,\nCaxias do Sul, RS\nDANFE NFC-e Documento Auxiliar da Nota Fiscal Eletronica para\nConsumidor Final - Via Estabelecimento\nNFC-e não permite aproveitamento de crédito de ICMS\nNFC-e EMITIDA EM AMBIENTE DE TESTE - SEM VALOR FISCAL\nItem EAN Descrição Qtde Un Vt Unit Vt Total\n1 0000002000107 Pao Frances Kg 5,99 5,99\n1,000\nKG\nQtd Total de Itens\nVALOR TOTAL R$\nDESCONTO TOTAL R$\nFORMA PAGAMENTO\nDinheiro\n5,99\n0,00\nVALOR PAGO R$\n5,99\nTributos Totais Incidentes (Lei Fed. 12.741/2012)\n0,01\nN: 000000139\nSérie:2\n01/04/2014 13:27:08\nConsulte pela Chave de Acesso em http://www.nfe.rs.gov.br\nCHAVE DE ACESSO\n4314 0492 1011 4600 0141 6500 2000 0001 3910 0000\nCONSUMIDOR\nConsumidor não informado\nConsulta via leitor de QR Code\nProtocolo de Autorização: 143140000383722\nOBRIGADO!\nPDV Cruzeiro Automação NFC-e\nversão 4.2.0.1\nCX:2 COO:000000139\nLJ:01 Oper:Cristiano L Fochesatti"
+  },
+  "receipt_items": [],
+  "total_amount": 5.99
+}

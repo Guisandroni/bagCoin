@@ -216,7 +216,7 @@ class TestWizardNodeFlow:
         result = wizard_node(state)
 
         assert result["response"], "Response should not be empty"
-        assert "categoria do orçamento" in result["response"]
+        assert "categoria e o valor" in result["response"]
         assert "valor" in result["response"]
         assert "Conta" not in result["response"]
 
@@ -469,7 +469,7 @@ class TestExecutionPhase:
 
         call_kwargs = mock_create_budget.call_args.kwargs
         assert call_kwargs["budget_type"] == "category", f"Expected category, got {call_kwargs}"
-        assert "Orçamento" in result["response"]
+        assert result["response"] == "✅ Orçamento criado com sucesso!"
 
     @patch("app.services.budget_service.create_budget")
     @patch("app.agents.wizard._clear_wizard_state")
@@ -498,4 +498,4 @@ class TestExecutionPhase:
 
         call_kwargs = mock_create_budget.call_args.kwargs
         assert call_kwargs["budget_type"] == "category", f"Expected category, got {call_kwargs}"
-        assert "Orçamento" in result["response"]
+        assert result["response"] == "✅ Orçamento criado com sucesso!"
