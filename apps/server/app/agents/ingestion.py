@@ -54,6 +54,44 @@ def _looks_like_budget_or_goal_request(msg_norm: str) -> bool:
     return True
 
 
+def _management_intent_from_message(msg_norm: str) -> tuple[str | None, str | None]:
+    """Fast-path explicit budget/goal management commands."""
+    has_budget = "orcamento" in msg_norm or "orcamentos" in msg_norm
+    has_goal = "meta" in msg_norm or "metas" in msg_norm
+    if not has_budget and not has_goal:
+        return None, None
+
+    delete_terms = ("excluir", "deletar", "apagar", "remover")
+    update_terms = ("editar", "alterar", "atualizar", "mudar", "trocar", "aumentar", "diminuir")
+    create_terms = ("criar", "crie", "novo", "nova", "definir", "defina", "adicionar")
+    list_terms = ("consultar", "listar", "mostrar", "ver", "quais", "como estao", "minhas", "meus")
+    contribute_terms = ("guardei", "guardar", "aportei", "depositei", "coloquei", "adicionei")
+
+    if has_budget:
+        if any(term in msg_norm for term in delete_terms):
+            return IntentType.DELETE_BUDGET.value, "manage"
+        if any(term in msg_norm for term in update_terms):
+            return IntentType.UPDATE_BUDGET.value, "manage"
+        if any(term in msg_norm for term in create_terms) or "limite" in msg_norm:
+            return IntentType.CREATE_BUDGET.value, "manage"
+        if any(term in msg_norm for term in list_terms):
+            return IntentType.QUERY_DATA.value, "query"
+
+    if has_goal:
+        if any(term in msg_norm for term in delete_terms):
+            return IntentType.DELETE_GOAL.value, "manage"
+        if any(term in msg_norm for term in update_terms):
+            return IntentType.UPDATE_GOAL.value, "manage"
+        if any(term in msg_norm for term in contribute_terms):
+            return IntentType.CONTRIBUTE_GOAL.value, "manage"
+        if any(term in msg_norm for term in create_terms) or re.search(r"\d+", msg_norm):
+            return IntentType.CREATE_GOAL.value, "manage"
+        if any(term in msg_norm for term in list_terms):
+            return IntentType.QUERY_DATA.value, "query"
+
+    return None, None
+
+
 def _looks_like_report_summary_request(msg_norm: str) -> bool:
     """Detect broad financial summary requests that should generate a PDF report."""
     if not msg_norm:
@@ -130,6 +168,7 @@ def classify_intent(state: dict[str, Any]) -> dict[str, Any]:
         elif _is_wizard_intent(wizard_type) and wizard_status in ["collecting", "confirming"]:
             intent_map = {
                 "create_budget": IntentType.CREATE_BUDGET.value,
+                "update_budget": IntentType.UPDATE_BUDGET.value,
                 "create_goal": IntentType.CREATE_GOAL.value,
                 "update_goal": IntentType.CONTRIBUTE_GOAL.value,
                 "contribute_goal": IntentType.CONTRIBUTE_GOAL.value,
@@ -161,7 +200,19 @@ def classify_intent(state: dict[str, Any]) -> dict[str, Any]:
         return state
 
     # =====================================================================
-    # FAST-PATH 3: "orçamento"/"meta" with value → manage (not register)
+    # FAST-PATH 3: explicit budget/goal management commands
+    # =====================================================================
+    management_intent, management_macro = _management_intent_from_message(msg_norm)
+    if management_intent and management_macro:
+        state["intent"] = management_intent
+        state["macro_intent"] = management_macro
+        state["confidence"] = 1.0
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"[classify_intent] Fast-path: budget/goal {management_intent} ({elapsed:.0f}ms)")
+        return state
+
+    # =====================================================================
+    # FAST-PATH 4: "orçamento"/"meta" with value → manage (not register)
     # =====================================================================
     if _looks_like_budget_or_goal_request(msg_norm):
         if "meta" in msg_norm and "orcamento" not in msg_norm:
@@ -175,7 +226,7 @@ def classify_intent(state: dict[str, Any]) -> dict[str, Any]:
         return state
 
     # =====================================================================
-    # FAST-PATH 4: broad financial summary → PDF report
+    # FAST-PATH 5: broad financial summary → PDF report
     # =====================================================================
     if _looks_like_report_summary_request(msg_norm):
         state["intent"] = IntentType.GENERATE_REPORT.value

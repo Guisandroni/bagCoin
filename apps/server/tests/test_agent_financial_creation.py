@@ -10,7 +10,7 @@ import app.db.models  # noqa: F401
 from app.db.base import Base
 from app.db.models.agent_log import AgentLog
 from app.db.models.agent_memory_event import AgentMemoryEvent
-from app.db.models.budget import Budget
+from app.db.models.budget import Budget, BudgetItem
 from app.db.models.category import Category
 from app.db.models.conversation_message import ConversationMessage
 from app.db.models.goal import Goal
@@ -34,6 +34,7 @@ def _session_factory():
             RecurringTransaction.__table__,
             Transaction.__table__,
             Budget.__table__,
+            BudgetItem.__table__,
             Goal.__table__,
             PhoneConversation.__table__,
             ConversationMessage.__table__,
@@ -141,6 +142,36 @@ def test_agent_budget_uses_existing_default_category(monkeypatch):
         saved = db.query(Budget).one()
         assert saved.category.name == "Supermercado"
         assert db.query(Category).filter(Category.name == "Mercado").count() == 0
+
+
+def test_pending_update_budget_matches_default_category_without_accent(monkeypatch):
+    factory = _patch_agent_db(monkeypatch)
+    from app.agents.pending_actions import handle_pending_confirmation, save_pending_action
+    from app.services.budget_service import create_budget
+
+    create_budget(
+        phone_number="5511999999999",
+        name="Combustível",
+        total_limit=120,
+        period="monthly",
+        budget_type="category",
+    )
+
+    response = save_pending_action(
+        "5511999999999",
+        action="update_budget",
+        params={"name": "combustivel", "total_limit": 200},
+        summary="Vou atualizar o orçamento combustivel para R$ 200.00.",
+    )
+
+    assert response.endswith("\n\nConfirma?")
+    final_response = handle_pending_confirmation("5511999999999", "sim")
+
+    assert "Orçamento atualizado" in final_response
+    with factory() as db:
+        budget = db.query(Budget).one()
+        assert budget.name == "Combustível"
+        assert budget.total_limit == 200
 
 
 def test_agent_budget_links_unified_user_id(monkeypatch):

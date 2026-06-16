@@ -14,12 +14,12 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import JsonOutputParser
 
+from app.core.config import settings
 from app.core.financial_categories import (
     DEFAULT_FINANCIAL_CATEGORIES,
     normalize_category_key,
     resolve_default_category_name,
 )
-from app.core.config import settings
 from app.services.llm_service import get_llm, timed_invoke
 
 logger = logging.getLogger(__name__)
@@ -133,6 +133,9 @@ CATEGORY_KEYWORDS = {
         "presente",
         "pai",
         "mae",
+        "pix",
+        "transferencia",
+        "deposito",
     ],
 }
 
@@ -163,7 +166,7 @@ def _suggest_category(text: str, user_cats: list[str] | None = None) -> str:
     text_norm = _norm(text)
 
     # 1. User-created categories take priority (substring match)
-    for name in (user_cats or []):
+    for name in user_cats or []:
         if _norm(name) in text_norm or text_norm in _norm(name):
             return name
 
@@ -245,7 +248,7 @@ def _regex_extract(message: str, user_cats: list[str] | None = None) -> dict[str
             if has_dot and has_comma:
                 last_sep_pos = max(amount_str.rfind("."), amount_str.rfind(","))
                 before = amount_str[:last_sep_pos].replace(".", "").replace(",", "")
-                after = amount_str[last_sep_pos + 1:]
+                after = amount_str[last_sep_pos + 1 :]
                 amount_str = before + "." + after
             elif has_dot:
                 dot_pos = amount_str.rfind(".")
@@ -266,9 +269,20 @@ def _regex_extract(message: str, user_cats: list[str] | None = None) -> dict[str
 
     # 2. Type detection
     income_signals = [
-        "recebi", "ganhei", "salário", "salario", "renda", "entrada",
-        "pagamento recebido", "me mandaram", "me mandou", "me enviaram",
-        "depositaram", "caiu", "mesada", "aluguel recebido",
+        "recebi",
+        "ganhei",
+        "salário",
+        "salario",
+        "renda",
+        "entrada",
+        "pagamento recebido",
+        "me mandaram",
+        "me mandou",
+        "me enviaram",
+        "depositaram",
+        "caiu",
+        "mesada",
+        "aluguel recebido",
     ]
     transfer_signals = ["transferi", "enviei", "mandei", "fiz pix", "passei para", "transferência"]
 
@@ -441,38 +455,87 @@ def _merge_results(
 
 ESTABLISHMENT_CATEGORY_HINTS: dict[str, tuple[str, ...]] = {
     "Supermercado": (
-        "mercado", "supermercado", "extra", "carrefour", "dia",
-        "atacadao", "assai", "hortifruti", "sams club", "makro",
+        "mercado",
+        "supermercado",
+        "extra",
+        "carrefour",
+        "dia",
+        "atacadao",
+        "assai",
+        "hortifruti",
+        "sams club",
+        "makro",
     ),
     "Farmácia": (
-        "farmacia", "drogaria", "drogasil", "raia", "pacheco",
-        "ultrafarma", "araujo", "nissei",
+        "farmacia",
+        "drogaria",
+        "drogasil",
+        "raia",
+        "pacheco",
+        "ultrafarma",
+        "araujo",
+        "nissei",
     ),
     "Restaurantes": (
-        "restaurante", "bar", "cafeteria", "cafe ", "pizzaria",
-        "lanchonete", "cantina", "churrascaria", "hamburgueria",
+        "restaurante",
+        "bar",
+        "cafeteria",
+        "cafe ",
+        "pizzaria",
+        "lanchonete",
+        "cantina",
+        "churrascaria",
+        "hamburgueria",
     ),
     "Delivery": ("ifood", "rappi", "uber eats", "99food", "loggi"),
     "Transporte": ("uber", "99 pop", "99pop", "metro ", "cptm", "cet "),
     "Combustível": (
-        "posto", "shell", "ipiranga", "petrobras", "br mania",
-        "ale combustiveis", "raizen",
+        "posto",
+        "shell",
+        "ipiranga",
+        "petrobras",
+        "br mania",
+        "ale combustiveis",
+        "raizen",
     ),
     "Vestuário": (
-        "loja", "riachuelo", "renner", "c&a", "marisa", "zara",
-        "lebes", "pernambucanas",
+        "loja",
+        "riachuelo",
+        "renner",
+        "c&a",
+        "marisa",
+        "zara",
+        "lebes",
+        "pernambucanas",
     ),
     "Saúde": (
-        "clinica", "hospital", "laboratorio", "fleury", "sabin",
-        "hapvida", "unimed", "amil",
+        "clinica",
+        "hospital",
+        "laboratorio",
+        "fleury",
+        "sabin",
+        "hapvida",
+        "unimed",
+        "amil",
     ),
     "Lazer": (
-        "cinemark", "cinepolis", "kinoplex", "uci cinemas",
-        "netflix", "spotify", "disney", "hbo",
+        "cinemark",
+        "cinepolis",
+        "kinoplex",
+        "uci cinemas",
+        "netflix",
+        "spotify",
+        "disney",
+        "hbo",
     ),
     "Tecnologia": (
-        "kabum", "magazine luiza", "americanas", "submarino",
-        "fast shop", "casas bahia", "ponto frio",
+        "kabum",
+        "magazine luiza",
+        "americanas",
+        "submarino",
+        "fast shop",
+        "casas bahia",
+        "ponto frio",
     ),
 }
 

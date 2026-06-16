@@ -13,15 +13,15 @@ import {
   Plane,
   MoreHorizontal,
   type LucideIcon,
-} from "lucide-react"
-import { createElement } from "react"
+} from "lucide-react";
+import { createElement } from "react";
 
 export interface CategoryDef {
-  name: string
-  emoji: string
-  lucideIcon: LucideIcon
-  color: string
-  type: "income" | "expense"
+  name: string;
+  emoji: string;
+  lucideIcon: LucideIcon;
+  color: string;
+  type: "income" | "expense";
 }
 
 const CATEGORY_MAP: Record<string, CategoryDef> = {
@@ -361,76 +361,77 @@ const CATEGORY_MAP: Record<string, CategoryDef> = {
     color: "#424242",
     type: "expense",
   },
-}
+};
 
 function normalize(key: string): string {
   return key
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z]/g, "")
+    .replace(/[^a-z]/g, "");
 }
 
 function resolveCategory(categoryKey: string): CategoryDef | undefined {
-  const key = normalize(categoryKey)
-  if (CATEGORY_MAP[key]) return CATEGORY_MAP[key]
+  const key = normalize(categoryKey);
+  if (CATEGORY_MAP[key]) return CATEGORY_MAP[key];
 
   for (const [k, v] of Object.entries(CATEGORY_MAP)) {
-    if (normalize(v.name) === key) return v
-    if (normalize(k) === key) return k === v.name.toLowerCase() ? v : undefined
+    if (normalize(v.name) === key) return v;
+    if (normalize(k) === key) return k === v.name.toLowerCase() ? v : undefined;
   }
-  return undefined
+  return undefined;
 }
 
 export function getCategoryEmoji(name: string): string {
-  return resolveCategory(name)?.emoji ?? "💳"
+  return resolveCategory(name)?.emoji ?? "💳";
 }
 
 export function getCategoryColor(name: string): string {
-  return resolveCategory(name)?.color ?? "#1652F0"
+  return resolveCategory(name)?.color ?? "#1652F0";
 }
 
 export function getCategoryLucideIcon(name: string): LucideIcon {
-  return resolveCategory(name)?.lucideIcon ?? MoreHorizontal
+  return resolveCategory(name)?.lucideIcon ?? MoreHorizontal;
 }
 
 export function getCategoryDef(name: string): CategoryDef {
-  return resolveCategory(name) ?? {
-    name,
-    emoji: "💳",
-    lucideIcon: MoreHorizontal,
-    color: "#95A5A6",
-    type: "expense",
-  }
+  return (
+    resolveCategory(name) ?? {
+      name,
+      emoji: "💳",
+      lucideIcon: MoreHorizontal,
+      color: "#95A5A6",
+      type: "expense",
+    }
+  );
 }
-
 export function CategoryIcon({
   name,
   size = 18,
   className,
 }: {
-  name: string
-  size?: number
-  className?: string
+  name: string;
+  size?: number;
+  className?: string;
 }) {
-  const Icon = getCategoryLucideIcon(name)
-  return createElement(Icon, { size, className })
+  const Icon = getCategoryLucideIcon(name);
+  return createElement(Icon, { size, className });
 }
 
-export const CATEGORY_LIST = Object.values(CATEGORY_MAP).map((c) => c.name)
+export const CATEGORY_LIST = Object.values(CATEGORY_MAP).map((c) => c.name);
 export const EXPENSE_CATEGORIES = Object.values(CATEGORY_MAP)
   .filter((c) => c.type === "expense")
-  .map((c) => c.name)
+  .map((c) => c.name);
 export const INCOME_CATEGORIES = Object.values(CATEGORY_MAP)
   .filter((c) => c.type === "income")
-  .map((c) => c.name)
+  .map((c) => c.name);
 export const CATEGORIES_WITH_EMOJI = Object.values(CATEGORY_MAP).map((c) => ({
   label: c.name,
   emoji: c.emoji,
   color: c.color,
-}))
+}));
 
-export { CATEGORY_MAP }
+export { CATEGORY_MAP };
 
 export const CATEGORIES = Object.values(CATEGORY_MAP).map((c) => ({
   label: c.name,
@@ -439,4 +440,4 @@ export const CATEGORIES = Object.values(CATEGORY_MAP).map((c) => ({
   color: c.color,
   emoji: c.emoji,
   type: c.type,
-}))
+}));

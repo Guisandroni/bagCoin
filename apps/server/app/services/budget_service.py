@@ -10,7 +10,11 @@ from typing import Any
 
 from sqlalchemy import func
 
-from app.core.financial_categories import default_category_names, resolve_default_category_name
+from app.core.financial_categories import (
+    default_category_names,
+    normalize_category_key,
+    resolve_default_category_name,
+)
 from app.db.models.budget import Budget
 from app.db.models.category import Category
 from app.db.models.enums import GoalStatus
@@ -224,26 +228,7 @@ def delete_budget_by_name(phone_number: str, name: str) -> int:
     db = sync_session_maker()
     try:
         user = _get_or_create_user(phone_number, db)
-        budgets = (
-            db.query(Budget)
-            .filter(
-                Budget.user_id == user.id,
-                Budget.name.ilike(f"%{name}%"),
-            )
-            .all()
-        )
-        if not budgets:
-            budgets = (
-                db.query(Budget)
-                .filter(
-                    Budget.user_id == user.id,
-                )
-                .join(Category, Budget.category_id == Category.id)
-                .filter(
-                    Category.name.ilike(f"%{name}%"),
-                )
-                .all()
-            )
+        budgets = _find_budgets_by_name(db, user.id, name)
         count = 0
         for budget in budgets:
             add_memory_event(
@@ -281,26 +266,7 @@ def update_budget_limit(phone_number: str, name: str, new_limit: float) -> dict[
     db = sync_session_maker()
     try:
         user = _get_or_create_user(phone_number, db)
-        budget = (
-            db.query(Budget)
-            .filter(
-                Budget.user_id == user.id,
-                Budget.name.ilike(f"%{name}%"),
-            )
-            .first()
-        )
-        if not budget:
-            budget = (
-                db.query(Budget)
-                .filter(
-                    Budget.user_id == user.id,
-                )
-                .join(Category, Budget.category_id == Category.id)
-                .filter(
-                    Category.name.ilike(f"%{name}%"),
-                )
-                .first()
-            )
+        budget = next(iter(_find_budgets_by_name(db, user.id, name)), None)
         if not budget:
             return None
         budget.total_limit = new_limit
@@ -333,6 +299,31 @@ def update_budget_limit(phone_number: str, name: str, new_limit: float) -> dict[
         raise
     finally:
         db.close()
+
+
+def _find_budgets_by_name(db, user_id: int, name: str) -> list[Budget]:
+    """Find budgets by budget/category name, ignoring accents and case."""
+    name_norm = normalize_category_key(resolve_default_category_name(name))
+    raw_norm = normalize_category_key(name)
+    if not name_norm and not raw_norm:
+        return []
+    budgets = db.query(Budget).filter(Budget.user_id == user_id).all()
+    matches: list[Budget] = []
+    for budget in budgets:
+        budget_norm = normalize_category_key(budget.name or "")
+        category_norm = normalize_category_key(budget.category.name if budget.category else "")
+        if (
+            raw_norm in budget_norm
+            or budget_norm in raw_norm
+            or raw_norm in category_norm
+            or category_norm in raw_norm
+            or name_norm in budget_norm
+            or budget_norm in name_norm
+            or name_norm in category_norm
+            or category_norm in name_norm
+        ):
+            matches.append(budget)
+    return matches
 
 
 # =====================================================================

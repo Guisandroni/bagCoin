@@ -6,6 +6,7 @@ Extracted from app.agents.wizard._extract_fields_with_llm() and _extract_correct
 # Default JSON format examples per wizard type
 FIELD_EXAMPLES: dict[str, str] = {
     "create_budget": '{"name": "alimentação", "total_limit": 3000, "period": "monthly"}',
+    "update_budget": '{"name": "combustível", "total_limit": 200}',
     "create_goal": '{"title": "viagem", "target_amount": 10000, "deadline": "12/2026"}',
     "update_goal": '{"goal_identifier": "bike", "amount": 500}',
     "contribute_goal": '{"goal_identifier": "bike", "amount": 500}',

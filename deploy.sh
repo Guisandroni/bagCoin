@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-DEPLOY_PATH="${DEPLOY_PATH:-$HOME/bagCoin}"
+DEPLOY_PATH="${DEPLOY_PATH:-/root/projects/bagCoin}"
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-feat/periodo-llm-classificacao-persistencia}"
 ENV_FILE="${ENV_FILE:-.env.prod}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
@@ -51,8 +51,13 @@ read_env_value() {
 ensure_traefik_usersfile() {
   local auth_value
 
+  if [[ -s "$TRAEFIK_USERSFILE" ]]; then
+    chmod 600 "$TRAEFIK_USERSFILE"
+    return
+  fi
+
   auth_value="$(read_env_value "TRAEFIK_DASHBOARD_AUTH" "$ENV_FILE")"
-  [[ -n "$auth_value" ]] || fail "TRAEFIK_DASHBOARD_AUTH não está definido em $ENV_FILE."
+  [[ -n "$auth_value" ]] || fail "Crie $TRAEFIK_USERSFILE ou defina TRAEFIK_DASHBOARD_AUTH em $ENV_FILE."
 
   mkdir -p "$(dirname "$TRAEFIK_USERSFILE")"
   printf '%s\n' "${auth_value//\$\$/\$}" > "$TRAEFIK_USERSFILE"
