@@ -462,7 +462,7 @@ def test_register_tool_agent_failure_does_not_fake_save(monkeypatch):
             raise RuntimeError("tools unsupported")
 
     monkeypatch.setattr(settings, "USE_TOOL_AGENTS", True)
-    monkeypatch.setattr("app.agents.orchestrator.get_llm", lambda *_, **__: BrokenToolLLM())
+    monkeypatch.setattr("app.services.llm_service.get_llm", lambda *_, **__: BrokenToolLLM())
 
     state = {
         "phone_number": "5511999999999",
@@ -602,7 +602,7 @@ def test_tool_goal_update_and_delete_use_fixed_messages(monkeypatch):
 def test_agent_manage_blocks_account_creation(monkeypatch):
     from app.agents.orchestrator import smart_manage_node
 
-    monkeypatch.setattr("app.agents.orchestrator.get_llm", lambda *_, **__: None)
+    monkeypatch.setattr("app.agents.nodes.smart.get_llm", lambda *_, **__: None)
 
     state = {
         "phone_number": "5511999999999",
@@ -621,7 +621,7 @@ def test_agent_manage_prepares_budget_without_llm(monkeypatch):
     from app.agents.orchestrator import smart_manage_tool_node
     from app.agents.pending_actions import load_pending_action
 
-    monkeypatch.setattr("app.agents.orchestrator.get_llm", lambda *_, **__: None)
+    monkeypatch.setattr("app.agents.nodes.smart.get_llm", lambda *_, **__: None)
     monkeypatch.setattr("app.agents.wizard._load_wizard_state", lambda *_: None)
 
     state = {
@@ -646,7 +646,7 @@ def test_agent_manage_prepares_budget_without_llm(monkeypatch):
 def test_agent_manage_blocks_credit_card_creation(monkeypatch):
     from app.agents.orchestrator import smart_manage_node
 
-    monkeypatch.setattr("app.agents.orchestrator.get_llm", lambda *_, **__: None)
+    monkeypatch.setattr("app.agents.nodes.smart.get_llm", lambda *_, **__: None)
 
     state = {
         "phone_number": "5511999999999",

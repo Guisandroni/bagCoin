@@ -216,7 +216,7 @@ class TestIntegrationPairingMultimodalNode:
         base.update(overrides)
         return base
 
-    @patch("app.agents.orchestrator.process_multimodal")
+    @patch("app.agents.nodes.multimodal.process_multimodal")
     @patch("app.services.integration_service.try_consume_link_pairing_sync")
     def test_pairing_fast_path_skips_multimodal(self, mock_consume, mock_multimodal):
         from app.agents.orchestrator import process_multimodal_node
@@ -232,7 +232,7 @@ class TestIntegrationPairingMultimodalNode:
         mock_consume.assert_called_once()
         mock_multimodal.assert_not_called()
 
-    @patch("app.agents.orchestrator.process_multimodal")
+    @patch("app.agents.nodes.multimodal.process_multimodal")
     @patch("app.services.integration_service.try_consume_link_pairing_sync")
     def test_normal_message_still_calls_multimodal(self, mock_consume, mock_multimodal):
         from app.agents.orchestrator import process_multimodal_node
