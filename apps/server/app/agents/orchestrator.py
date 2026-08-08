@@ -14,7 +14,6 @@ from langgraph.graph import END, StateGraph
 from app.agents import responses as resp
 from app.agents.budget_goal import (
     check_alerts_node,
-    toggle_alerts_node,
 )
 from app.agents.deep_research import deep_research
 from app.agents.import_statement import import_transactions
@@ -177,13 +176,6 @@ def save_transaction_node(state: AgentState) -> AgentState:
     return AgentState(**result)
 
 
-def process_query_node(state: AgentState) -> AgentState:
-    """Nó de consulta text-to-SQL."""
-    logger.info("Processando consulta")
-    result = process_query(dict(state))
-    return AgentState(**result)
-
-
 def pending_confirmation_node(state: AgentState) -> AgentState:
     """Executa ou cancela uma acao financeira pendente."""
     response = handle_pending_confirmation(
@@ -223,37 +215,6 @@ def alerts_node(state: AgentState) -> AgentState:
     logger.info("Verificando alertas")
     result = check_alerts_node(dict(state))
     return AgentState(**result)
-
-
-def update_category_handler_node(state: AgentState) -> AgentState:
-    """Nó de renomear categoria."""
-    from app.agents.persistence import list_categories, rename_category
-
-    phone_number = state.get("phone_number", "")
-    message = state.get("message", "")
-    msg_norm = _msg_norm(message)
-    match = re.search(
-        r'(?:renomear|mudar nome da|alterar)\s+categoria\s+["\']?(.+?)["\']?\s+(?:para|->)\s+["\']?(.+?)["\']?$',
-        msg_norm,
-    )
-    if match:
-        old_name = match.group(1).strip().capitalize()
-        new_name = match.group(2).strip().capitalize()
-        if rename_category(phone_number, old_name, new_name):
-            state["response"] = f"Categoria '{old_name}' renomeada para '{new_name}'."
-        else:
-            state["response"] = f"Não encontrei a categoria '{old_name}'."
-    else:
-        cats = list_categories(phone_number)
-        user_cats = [c["name"] for c in cats if not c["is_default"]]
-        if user_cats:
-            state["response"] = (
-                "Para renomear, use: 'renomear categoria NOME_ANTIGO para NOVO_NOME'. Categorias: "
-                + ", ".join(user_cats)
-            )
-        else:
-            state["response"] = "Você não tem categorias personalizadas para renomear."
-    return state
 
 
 def _extract_budget_request(message: str) -> dict[str, Any] | None:
@@ -593,118 +554,6 @@ def _build_financial_snapshot_response(
     return "\n\n".join(part for part in parts if part.strip())
 
 
-def create_category_handler_node(state: AgentState) -> AgentState:
-    """Nó de criação de categoria."""
-    from app.agents.persistence import create_category
-
-    phone_number = state.get("phone_number", "")
-    message = state.get("message", "")
-    msg_norm = _msg_norm(message)
-    name = None
-    for prefix in [
-        "criar categoria ",
-        "nova categoria ",
-        "adicionar categoria ",
-        "crie uma categoria ",
-    ]:
-        if prefix in msg_norm:
-            idx = msg_norm.find(prefix) + len(prefix)
-            name = message[idx:].strip().capitalize()
-            break
-    if not name or len(name) < 2:
-        state["response"] = "Qual o nome da nova categoria? Ex: 'Criar categoria Academia'"
-        return state
-    result = create_category(phone_number, name)
-    if result is None:
-        state["response"] = f"A categoria '{name}' já existe."
-    else:
-        state["response"] = f"Categoria '{name}' criada com sucesso!"
-    return state
-
-
-def delete_category_handler_node(state: AgentState) -> AgentState:
-    """Nó de exclusão de categoria."""
-    from app.agents.persistence import delete_category, list_categories
-
-    phone_number = state.get("phone_number", "")
-    message = state.get("message", "")
-    msg_norm = _msg_norm(message)
-    name = None
-    for prefix in ["excluir categoria ", "apagar categoria ", "remover categoria "]:
-        if prefix in msg_norm:
-            idx = msg_norm.find(prefix) + len(prefix)
-            name = message[idx:].strip().capitalize()
-            break
-    if not name or len(name) < 2:
-        cats = list_categories(phone_number)
-        user_cats = [c["name"] for c in cats if not c["is_default"]]
-        if user_cats:
-            state["response"] = "Qual categoria deseja excluir? " + ", ".join(user_cats)
-        else:
-            state["response"] = "Você não tem categorias personalizadas para excluir."
-        return state
-    if delete_category(phone_number, name):
-        state["response"] = f"Categoria '{name}' removida."
-    else:
-        state["response"] = (
-            f"Não encontrei a categoria '{name}' ou ela é padrão e não pode ser removida."
-        )
-    return state
-
-
-def list_categories_handler_node(state: AgentState) -> AgentState:
-    """Nó de listagem de categorias."""
-    from app.agents.persistence import list_categories
-
-    phone_number = state.get("phone_number", "")
-    cats = list_categories(phone_number)
-    if not cats:
-        state["response"] = "Você não tem categorias ainda."
-        return state
-    default_cats = [c["name"] for c in cats if c["is_default"]]
-    user_cats = [c["name"] for c in cats if not c["is_default"]]
-    lines = ["Suas categorias:"]
-    if default_cats:
-        lines.append("\nPadrão: " + ", ".join(default_cats))
-    if user_cats:
-        lines.append("\nPersonalizadas: " + ", ".join(user_cats))
-    state["response"] = "".join(lines)
-    return state
-
-
-def intro_handler_node(state: AgentState) -> AgentState:
-    """Nó de introdução do usuário (nome)."""
-    import re as regex
-
-    from app.agents.persistence import save_user_name
-
-    message = state.get("message", "")
-    phone_number = state.get("phone_number", "")
-
-    patterns = [
-        r"(?:meu nome [eé]|me chamo|pode me chamar de|eu sou o|eu sou a)\s+([a-zA-ZÀ-ÿ]+)",
-    ]
-    name = None
-    for p in patterns:
-        m = regex.search(p, message, regex.IGNORECASE)
-        if m:
-            name = m.group(1).strip().capitalize()
-            break
-    if name:
-        save_user_name(phone_number, name)
-        state["response"] = f"Prazer em conhecer você, {name}! Como posso ajudar?"
-    else:
-        state["response"] = "Prazer em conhecer você! Como posso ajudar?"
-    return state
-
-
-def toggle_alerts_handler_node(state: AgentState) -> AgentState:
-    """Nó de ativar/desativar alertas."""
-    logger.info("Toggling alerts")
-    result = toggle_alerts_node(dict(state))
-    return AgentState(**result)
-
-
 def wizard_handler_node(state: AgentState) -> AgentState:
     """Nó de wizard multi-turno para orçamentos, metas, etc."""
     logger.info("Executando wizard")
@@ -1016,15 +865,7 @@ def legacy_smart_manage_node(state: AgentState) -> AgentState:
         return state
 
     # 1. Fast-path: comandos explicitos com keywords claras
-    # Categoria — mantido deterministico pois e simples
-    if any(w in msg_norm for w in ["criar categoria", "nova categoria", "adicionar categoria"]):
-        return create_category_handler_node(state)
-    if any(w in msg_norm for w in ["excluir categoria", "apagar categoria", "remover categoria"]):
-        return delete_category_handler_node(state)
-    if any(w in msg_norm for w in ["minhas categorias", "quais categorias", "listar categorias"]):
-        return list_categories_handler_node(state)
-    if any(w in msg_norm for w in ["renomear categoria", "mudar nome da categoria"]):
-        return update_category_handler_node(state)
+    # Categorias sao gerenciadas pelo caminho tool-agent (ADR-0001).
 
     # 2. Wizard — se tem estado ativo, continua
     from app.agents.wizard import _load_wizard_state
@@ -1124,7 +965,10 @@ Responda APENAS JSON:
                 "Me diga o que quer corrigir e eu ajudo."
             )
         elif action == "toggle_alerts":
-            return toggle_alerts_handler_node(state)
+            state["response"] = (
+                "Os alertas são gerenciados pelo assistente moderno. "
+                "Pode me pedir para ativar ou desativar."
+            )
         else:
             # help — usuario nao especificou
             state["response"] = (
@@ -1434,21 +1278,14 @@ def create_orchestrator():
     workflow.add_node("extract_data", extract_data_node)
     workflow.add_node("save_transaction", save_transaction_node)
     workflow.add_node("check_alerts", alerts_node)
-    workflow.add_node("process_query", process_query_node)
     workflow.add_node("generate_report", generate_report_node)
     workflow.add_node("generate_recommendations", generate_recommendations_node)
     workflow.add_node("deep_research", deep_research_node)
     workflow.add_node("import_statement", import_statement_node)
-    workflow.add_node("introduce", intro_handler_node)
-    workflow.add_node("toggle_alerts", toggle_alerts_handler_node)
     workflow.add_node("wizard", wizard_handler_node)
     workflow.add_node("smart_query", smart_query_node)
     workflow.add_node("smart_manage", smart_manage_node)
     workflow.add_node("chat", chat_node)
-    workflow.add_node("create_category", create_category_handler_node)
-    workflow.add_node("delete_category", delete_category_handler_node)
-    workflow.add_node("list_categories", list_categories_handler_node)
-    workflow.add_node("update_category", update_category_handler_node)
     workflow.add_node("build_response", build_response_node)
     workflow.add_node("finalize_response", finalize_response_node)
 
@@ -1478,18 +1315,11 @@ def create_orchestrator():
             "register_agent": "register_agent",
             "smart_query": "smart_query",
             "smart_manage": "smart_manage",
-            "process_query": "process_query",
             "generate_report": "generate_report",
             "generate_recommendations": "generate_recommendations",
             "deep_research": "deep_research",
-            "introduce": "introduce",
-            "toggle_alerts": "toggle_alerts",
             "wizard": "wizard",
             "chat": "chat",
-            "create_category": "create_category",
-            "delete_category": "delete_category",
-            "list_categories": "list_categories",
-            "update_category": "update_category",
             "build_response": "build_response",
         },
     )
@@ -1501,21 +1331,14 @@ def create_orchestrator():
     workflow.add_edge("extract_data", "save_transaction")
     workflow.add_edge("save_transaction", "check_alerts")
     workflow.add_edge("check_alerts", "build_response")
-    workflow.add_edge("process_query", "build_response")
     workflow.add_edge("generate_report", "build_response")
     workflow.add_edge("generate_recommendations", "build_response")
     workflow.add_edge("deep_research", "build_response")
     workflow.add_edge("import_statement", "build_response")
-    workflow.add_edge("introduce", "build_response")
-    workflow.add_edge("toggle_alerts", "build_response")
     workflow.add_edge("wizard", "build_response")
     workflow.add_edge("chat", "build_response")
     workflow.add_edge("smart_query", "build_response")
     workflow.add_edge("smart_manage", "build_response")
-    workflow.add_edge("create_category", "build_response")
-    workflow.add_edge("delete_category", "build_response")
-    workflow.add_edge("list_categories", "build_response")
-    workflow.add_edge("update_category", "build_response")
     workflow.add_edge("build_response", "finalize_response")
     workflow.add_edge("finalize_response", END)
 
