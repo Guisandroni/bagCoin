@@ -14,9 +14,7 @@ from langgraph.graph import END, StateGraph
 from app.agents import responses as resp
 from app.agents.budget_goal import (
     check_alerts_node,
-    delete_transaction_node,
     toggle_alerts_node,
-    update_transaction_node,
 )
 from app.agents.deep_research import deep_research
 from app.agents.import_statement import import_transactions
@@ -224,20 +222,6 @@ def alerts_node(state: AgentState) -> AgentState:
     """Nó de verificação de alertas após transação."""
     logger.info("Verificando alertas")
     result = check_alerts_node(dict(state))
-    return AgentState(**result)
-
-
-def delete_transaction_handler_node(state: AgentState) -> AgentState:
-    """Nó de exclusão de transação."""
-    logger.info("Excluindo transação")
-    result = delete_transaction_node(dict(state))
-    return AgentState(**result)
-
-
-def update_transaction_handler_node(state: AgentState) -> AgentState:
-    """Nó de atualização de transação."""
-    logger.info("Atualizando transação")
-    result = update_transaction_node(dict(state))
     return AgentState(**result)
 
 
@@ -714,55 +698,6 @@ def intro_handler_node(state: AgentState) -> AgentState:
     return state
 
 
-def correction_handler_node(state: AgentState) -> AgentState:
-    """Nó de correção de transação — suporta valor, categoria, descrição."""
-    import re as regex
-
-    phone_number = state.get("phone_number", "")
-    message = state.get("message", "")
-
-    # 1. Correção de valor: "R$ 50" ou "na verdade foi R$ 60"
-    amount_match = regex.search(
-        r"R?\$\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{1,2}|\d+(?:[.,]\d{1,2})?)", message
-    )
-    if amount_match:
-        return update_transaction_handler_node(state)
-
-    # 2. Correção de categoria: "era Alimentação" / "categoria certa é Transporte"
-    msg_lower = message.lower()
-    cat_match = regex.search(
-        r"(?:era|categoria\s+(?:certa|correta)\s+[ée])\s+([a-zA-ZÀ-ÿ\s]+)", msg_lower
-    )
-    if not cat_match:
-        cat_match = regex.search(
-            r"(?:corrige|muda)\s+(?:a\s+)?categoria\s+(?:para|como)\s+([a-zA-ZÀ-ÿ\s]+)", msg_lower
-        )
-    if cat_match:
-        state["extracted_data"] = {
-            "category_name": cat_match.group(1).strip().capitalize()
-        }
-        return update_transaction_handler_node(state)
-
-    # 3. Correção de descrição: "o nome é Mercado" / "descrição certa é Padaria"
-    desc_match = regex.search(r"(?:o\s+)?nome\s+(?:[ée]|certo\s+[ée])\s+(.+)", msg_lower)
-    if not desc_match:
-        desc_match = regex.search(r"descrição\s+(?:certa\s+)?[ée]\s+(.+)", msg_lower)
-    if desc_match:
-        state["extracted_data"] = {
-            "description": desc_match.group(1).strip().capitalize()
-        }
-        return update_transaction_handler_node(state)
-
-    # Fallback: pergunta o que corrigir
-    state["response"] = (
-        "O que você quer corrigir?\n"
-        "• Valor: 'era R$ 60'\n"
-        "• Categoria: 'era Alimentação'\n"
-        "• Descrição: 'o nome é Mercado'"
-    )
-    return state
-
-
 def toggle_alerts_handler_node(state: AgentState) -> AgentState:
     """Nó de ativar/desativar alertas."""
     logger.info("Toggling alerts")
@@ -1183,16 +1118,11 @@ Responda APENAS JSON:
                 "Me diga o que quer fazer e eu ajudo: criar orçamento, meta, "
                 "ou ajustar transações."
             )
-        elif action == "delete_transaction":
-            state["extracted_data"] = {"description": params.get("description", "")}
-            return delete_transaction_handler_node(state)
-        elif action == "update_transaction":
-            state["extracted_data"] = {
-                "description": params.get("description", ""),
-                "amount": params.get("new_amount"),
-                "category_name": params.get("new_category"),
-            }
-            return update_transaction_handler_node(state)
+        elif action in {"delete_transaction", "update_transaction"}:
+            state["response"] = (
+                "Ajustes de transação são gerenciados pelo assistente moderno. "
+                "Me diga o que quer corrigir e eu ajudo."
+            )
         elif action == "toggle_alerts":
             return toggle_alerts_handler_node(state)
         else:
@@ -1509,10 +1439,7 @@ def create_orchestrator():
     workflow.add_node("generate_recommendations", generate_recommendations_node)
     workflow.add_node("deep_research", deep_research_node)
     workflow.add_node("import_statement", import_statement_node)
-    workflow.add_node("delete_transaction", delete_transaction_handler_node)
-    workflow.add_node("update_transaction", update_transaction_handler_node)
     workflow.add_node("introduce", intro_handler_node)
-    workflow.add_node("correction", correction_handler_node)
     workflow.add_node("toggle_alerts", toggle_alerts_handler_node)
     workflow.add_node("wizard", wizard_handler_node)
     workflow.add_node("smart_query", smart_query_node)
@@ -1555,10 +1482,7 @@ def create_orchestrator():
             "generate_report": "generate_report",
             "generate_recommendations": "generate_recommendations",
             "deep_research": "deep_research",
-            "delete_transaction": "delete_transaction",
-            "update_transaction": "update_transaction",
             "introduce": "introduce",
-            "correction": "correction",
             "toggle_alerts": "toggle_alerts",
             "wizard": "wizard",
             "chat": "chat",
@@ -1582,10 +1506,7 @@ def create_orchestrator():
     workflow.add_edge("generate_recommendations", "build_response")
     workflow.add_edge("deep_research", "build_response")
     workflow.add_edge("import_statement", "build_response")
-    workflow.add_edge("delete_transaction", "build_response")
-    workflow.add_edge("update_transaction", "build_response")
     workflow.add_edge("introduce", "build_response")
-    workflow.add_edge("correction", "build_response")
     workflow.add_edge("toggle_alerts", "build_response")
     workflow.add_edge("wizard", "build_response")
     workflow.add_edge("chat", "build_response")
