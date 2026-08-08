@@ -6,9 +6,8 @@ via LangGraph's StateGraph with conditional routing.
 
 import logging
 import re
-import unicodedata
 from datetime import UTC, datetime
-from typing import Any, TypedDict
+from typing import Any
 
 from langgraph.graph import END, StateGraph
 
@@ -30,10 +29,19 @@ from app.agents.budget_goal import (
 from app.agents.deep_research import deep_research
 from app.agents.import_statement import import_transactions
 from app.agents.ingestion import classify_intent
+from app.agents.builders import _BUILDERS, build_fallback_response
 from app.agents.humanize import humanize_safely, should_humanize
 from app.agents.multimodal import process_multimodal
 from app.agents.normalization import extract_transaction
 from app.agents.persistence import save_message_to_history, save_transaction
+from app.agents.routing import (
+    _is_account_or_card_request,
+    _is_budget_create_request,
+    _msg_norm,
+    route_after_multimodal,
+    route_by_intent,
+)
+from app.agents.state import AgentState
 from app.agents.pending_actions import (
     handle_pending_confirmation,
     has_pending_confirmation_message,
@@ -53,32 +61,6 @@ from app.services.integration_service import redact_message_for_log
 from app.services.llm_service import get_llm, timed_invoke
 
 logger = logging.getLogger(__name__)
-
-
-class AgentState(TypedDict):
-    """Estado que trafega pelo grafo LangGraph do BagCoin."""
-
-    phone_number: str
-    user_id: int | None
-    message: str
-    intent: str | None
-    extracted_data: dict[str, Any] | None
-    query_result: dict[str, Any] | None
-    report_id: int | None
-    report_path: str | None
-    report_summary: str | None
-    import_summary: str | None
-    imported_count: int | None
-    skipped_count: int | None
-    import_errors: list | None
-    budget_data: dict[str, Any] | None
-    goal_data: dict[str, Any] | None
-    alerts: list | None
-    wizard: dict[str, Any] | None
-    response: str | None
-    context: dict[str, Any]
-    error: str | None
-    source_format: str
 
 
 def process_multimodal_node(state: AgentState) -> AgentState:
@@ -322,9 +304,7 @@ def update_category_handler_node(state: AgentState) -> AgentState:
 
     phone_number = state.get("phone_number", "")
     message = state.get("message", "")
-    msg_norm = (
-        unicodedata.normalize("NFKD", message.lower()).encode("ASCII", "ignore").decode("ASCII")
-    )
+    msg_norm = _msg_norm(message)
     match = re.search(
         r'(?:renomear|mudar nome da|alterar)\s+categoria\s+["\']?(.+?)["\']?\s+(?:para|->)\s+["\']?(.+?)["\']?$',
         msg_norm,
@@ -347,35 +327,6 @@ def update_category_handler_node(state: AgentState) -> AgentState:
         else:
             state["response"] = "Você não tem categorias personalizadas para renomear."
     return state
-
-
-def _msg_norm(message: str) -> str:
-    import unicodedata
-
-    return unicodedata.normalize("NFKD", message.lower()).encode("ASCII", "ignore").decode("ASCII")
-
-
-def _is_account_or_card_request(msg_norm: str) -> bool:
-    create_terms = ("criar", "crie", "adicionar", "cadastrar", "abrir", "nova", "novo")
-    account_terms = ("conta", "saldo", "banco", "nubank", "itau", "inter", "bradesco", "santander")
-    card_terms = ("cartao", "credito", "limite do cartao", "fatura")
-    if not any(term in msg_norm for term in create_terms):
-        return False
-    return any(term in msg_norm for term in account_terms) or any(
-        term in msg_norm for term in card_terms
-    )
-
-
-def _is_budget_create_request(msg_norm: str) -> bool:
-    budget_terms = ("orcamento", "orcamentos", "limite mensal", "limite por categoria")
-    create_terms = ("criar", "crie", "novo", "nova", "definir", "defina", "adicionar")
-    delete_terms = ("excluir", "deletar", "apagar", "remover")
-    update_terms = ("editar", "alterar", "atualizar", "mudar", "trocar", "aumentar", "diminuir")
-    if any(term in msg_norm for term in delete_terms + update_terms):
-        return False
-    if any(term in msg_norm for term in budget_terms):
-        return True
-    return any(term in msg_norm for term in create_terms) and "limite" in msg_norm
 
 
 def _extract_budget_request(message: str) -> dict[str, Any] | None:
@@ -1548,163 +1499,34 @@ def smart_manage_node(state: AgentState) -> AgentState:
 
 
 def build_response_node(state: AgentState) -> AgentState:
-    """Nó de construção da resposta final."""
-    from app.agents.persistence import get_or_create_user
-    from app.db.session import sync_session_maker
-
+    """Nó de construção da resposta final — dispatcher para builders por intent."""
+    message = state.get("message", "")
     intent = state.get("intent")
     error = state.get("error")
-    message = state.get("message", "")
-    phone_number = state.get("phone_number", "")
 
+    # Edge-case: error bracket message
     if message.startswith("[") and message.endswith("]"):
         state["response"] = message[1:-1]
         return state
 
+    # Already has a response — keep it
     if state.get("response"):
         return state
 
+    # Error takes priority
     if error:
         state["response"] = resp.error_message(error)
         return state
 
-    if intent == IntentType.REGISTER_EXPENSE.value or intent == IntentType.REGISTER_INCOME.value:
-        extracted = state.get("extracted_data", {})
-        tx_type = extracted.get("type", "EXPENSE")
-        amount = extracted.get("amount", 0)
-        category = state.get("category_name", extracted.get("category", "Outros"))
-        desc = extracted.get("description", "")
-        tx_date = state.get("transaction_date") or extracted.get("date") or extracted.get("transaction_date")
-
-        state["response"] = resp.transaction_registered(tx_type, amount, category, desc, tx_date)
-
-        alerts = state.get("alerts", [])
-        if alerts:
-            alert_texts = [a["message"] for a in alerts]
-            state["response"] += "\n\n" + "\n".join(alert_texts)
-
-        if tx_type == "INCOME":
-            db = sync_session_maker()
-            try:
-                user = get_or_create_user(phone_number, db)
-                from app.services.budget_service import get_goals
-
-                goals = get_goals(phone_number)
-                active_goals = [g for g in goals if g.get("status") == "active"]
-                if active_goals:
-                    goal_names = ", ".join([g["title"] for g in active_goals[:3]])
-                    state["response"] += (
-                        f"\n\nQuer direcionar parte para alguma meta? Você tem: {goal_names}"
-                    )
-            except Exception:
-                pass
-            finally:
-                db.close()
-
-    elif intent == IntentType.QUERY_DATA.value:
-        query_result = state.get("query_result", {})
-        if query_result and query_result.get("summary"):
-            state["response"] = query_result["summary"]
-        else:
-            state["response"] = "Não encontrei dados para sua consulta."
-
-    elif intent == IntentType.GENERATE_REPORT.value:
-        summary = state.get("report_summary", "Relatório gerado com sucesso!")
-        state["response"] = summary
-
-    elif intent == IntentType.GREETING.value:
-        db = sync_session_maker()
-        try:
-            user = get_or_create_user(phone_number, db)
-            name = user.name if hasattr(user, "name") and user.name else None
-        except Exception:
-            name = None
-        finally:
-            db.close()
-        hour = datetime.now(UTC).hour
-        if hour < 12:
-            greeting_time = "Bom dia"
-        elif hour < 18:
-            greeting_time = "Boa tarde"
-        else:
-            greeting_time = "Boa noite"
-        state["response"] = resp.greeting(name=name, greeting_time=greeting_time)
-
-    elif intent == IntentType.INTRODUCE.value:
-        pass
-
-    elif intent == IntentType.HELP.value:
-        state["response"] = resp.help_menu()
-
-    elif intent == IntentType.CREATE_BUDGET.value:
-        if not state.get("response"):
-            state["response"] = (
-                "Para criar um orçamento, me diga algo como:\n"
-                "• Orçamento de R$ 3000 para alimentação\n"
-                "• Limite de R$ 800 para transporte"
-            )
-
-    elif intent == IntentType.CREATE_GOAL.value:
-        if not state.get("response"):
-            state["response"] = (
-                "Para criar uma meta, me diga algo como:\n"
-                "• Quero guardar R$ 5000 para viagem\n"
-                "• Meta de reserva de emergência: R$ 10000"
-            )
-
-    elif intent == IntentType.IMPORT_STATEMENT.value:
-        if state.get("import_summary"):
-            state["response"] = state["import_summary"]
-        else:
-            state["response"] = (
-                "Para importar seu extrato, envie o arquivo diretamente aqui:\n"
-                "• PDF do banco\n"
-                "• CSV (Excel)\n"
-                "• Arquivo OFX\n\n"
-                "Suporto extratos do Nubank, Itaú, Bradesco, Caixa e outros.\n"
-                "Assim que enviar, mostro uma prévia e peço confirmação antes de importar."
-            )
-
-    elif state.get("import_summary"):
+    # import_summary wins for intents without a dedicated builder
+    # (matches the old else-chain: import_summary beat the LLM fallback).
+    if state.get("import_summary") and intent not in _BUILDERS:
         state["response"] = state["import_summary"]
+        return state
 
-    else:
-        # Fallback final — tenta usar LLM para responder
-        from langchain_core.messages import HumanMessage, SystemMessage
-
-        from app.services.llm_service import get_llm, timed_invoke
-
-        llm = get_llm(temperature=0.7)
-        if llm:
-            try:
-                msgs = [
-                    SystemMessage(
-                        content="Você é o BagCoin, assistente financeiro. Responda de forma breve e útil."
-                    ),
-                    HumanMessage(content=message),
-                ]
-                r, _ = timed_invoke(llm, msgs, operation="build_response")
-                response_text = r.content[:500]
-
-                # Filter: detect LLM-generated error/generic responses
-                _bad_llm_patterns = [
-                    "sorry, i couldn't", "i couldn't process",
-                    "i'm sorry", "i am sorry", "sorry, i can't",
-                    "i cannot", "i'm unable", "i am unable",
-                    "as an ai", "as a language model",
-                ]
-                if any(p in response_text.lower() for p in _bad_llm_patterns):
-                    logger.warning(
-                        f"[build_response] LLM returned generic error: {response_text[:100]}"
-                    )
-                    state["response"] = resp.unknown_intent()
-                else:
-                    state["response"] = response_text
-            except Exception:
-                state["response"] = resp.unknown_intent()
-        else:
-            state["response"] = resp.unknown_intent()
-
+    # Dispatch to intent-specific builder, or fallback
+    builder = _BUILDERS.get(intent, build_fallback_response)
+    state["response"] = builder(state)
     return state
 
 
@@ -1734,122 +1556,6 @@ def _save_history(phone_number: str, user_msg: str, bot_msg: str):
         save_message_to_history(phone_number, "bot", bot_msg)
     except Exception:
         pass
-
-
-def route_after_multimodal(state: AgentState) -> str:
-    """Roteia após processamento multimodal:
-    - Se detectar extrato bancário, vai para import_statement
-    - Senão, vai para classify_intent (ponto de entrada unificado)
-    """
-    error = state.get("error")
-    if error:
-        return "build_response"
-    if state.get("response"):
-        return "build_response"
-    if settings.USE_TOOL_AGENTS and has_pending_confirmation_message(
-        state.get("phone_number", ""),
-        state.get("message", ""),
-    ):
-        return "pending_confirmation"
-    original_format = (state.get("context") or {}).get("original_format")
-    # Imagem de recibo com extração estruturada → registrar como transação única
-    image_structured = (state.get("context") or {}).get("image_structured")
-    if isinstance(image_structured, dict):
-        from app.agents.document_understanding import _normalize_receipt_payload
-
-        image_structured = _normalize_receipt_payload(image_structured)
-    if (
-        original_format == "image"
-        and image_structured
-        and image_structured.get("is_receipt")
-        and (image_structured.get("total_amount") or image_structured.get("items"))
-    ):
-        logger.info("Recibo identificado na imagem. Criando confirmação de registro.")
-        return "receipt_confirm"
-    if settings.USE_TOOL_AGENTS and original_format in {"document", "image"}:
-        logger.info("Mídia financeira será analisada pela tool de documentos.")
-        return "document_agent"
-    if state.get("source_format") == "document" and detect_statement(dict(state)):
-        logger.info("Extrato bancário detectado. Roteando para importação.")
-        return "import_statement"
-    return "classify_intent"
-
-
-def route_by_intent(state: AgentState) -> str:
-    """Roteia para o proximo no baseado na macro-intencao + contexto.
-
-    Usa 8 macro-intencoes em vez de 37 intencoes individuais.
-    O desempate (ex: criar vs editar orcamento) e feito pelo handler downstream.
-    """
-    intent = state.get("intent")
-    error = state.get("error")
-    macro = state.get("macro_intent", "")
-
-    if error:
-        return "build_response"
-
-    # Fast-path: response already set by classify_intent
-    if state.get("response"):
-        return "build_response"
-
-    if _is_account_or_card_request(_msg_norm(state.get("message", ""))):
-        return "smart_manage"
-
-    # === Macro-intent routing ===
-    if macro == "register":
-        if settings.USE_TOOL_AGENTS:
-            return "register_agent"
-        return "extract_data"
-
-    if macro == "query":
-        return "smart_query"  # novo: query com contexto
-
-    if macro == "manage":
-        return "smart_manage"  # novo: manage com LLM unificado
-
-    if macro == "report":
-        return "generate_report"
-
-    if macro == "import_stmt":
-        return "import_statement"
-
-    if macro == "recommend":
-        return "generate_recommendations"
-
-    if macro == "research":
-        return "deep_research"
-
-    # Fallback routing for states that still carry only the detailed intent.
-    routing_map = {
-        IntentType.REGISTER_EXPENSE.value: "register_agent" if settings.USE_TOOL_AGENTS else "extract_data",
-        IntentType.REGISTER_INCOME.value: "register_agent" if settings.USE_TOOL_AGENTS else "extract_data",
-        IntentType.QUERY_DATA.value: "smart_query",
-        IntentType.GENERATE_REPORT.value: "generate_report",
-        IntentType.RECOMMENDATION.value: "generate_recommendations",
-        IntentType.DEEP_RESEARCH.value: "deep_research",
-        IntentType.IMPORT_STATEMENT.value: "import_statement",
-        IntentType.GREETING.value: "chat",
-        IntentType.INTRODUCE.value: "chat",
-        IntentType.HELP.value: "chat",
-        IntentType.CHAT.value: "chat",
-        IntentType.CREATE_BUDGET.value: "smart_manage",
-        IntentType.CREATE_GOAL.value: "smart_manage",
-        IntentType.CONTRIBUTE_GOAL.value: "smart_manage",
-        IntentType.DELETE_BUDGET.value: "smart_manage",
-        IntentType.UPDATE_BUDGET.value: "smart_manage",
-        IntentType.DELETE_GOAL.value: "smart_manage",
-        IntentType.UPDATE_GOAL.value: "smart_manage",
-        IntentType.DELETE_TRANSACTION.value: "smart_manage",
-        IntentType.UPDATE_TRANSACTION.value: "smart_manage",
-        IntentType.CORRECTION.value: "smart_manage",
-        IntentType.TOGGLE_ALERTS.value: "smart_manage",
-        IntentType.CREATE_CATEGORY.value: "smart_manage",
-        IntentType.DELETE_CATEGORY.value: "smart_manage",
-        IntentType.LIST_CATEGORIES.value: "smart_manage",
-        IntentType.UPDATE_CATEGORY.value: "smart_manage",
-        IntentType.UNKNOWN.value: "chat",
-    }
-    return routing_map.get(intent, "chat")
 
 
 def create_orchestrator():
