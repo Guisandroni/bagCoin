@@ -45,8 +45,29 @@ def _state(**overrides: Any) -> AgentState:
 # ── build_transaction_response ──────────────────────────────────────────────
 
 class TestBuildTransactionResponse:
-    def test_expense_with_category(self, monkeypatch):
+    def test_expense_passes_extracted_args_to_formatter(self, monkeypatch):
+        """The builder must forward extracted data to the response formatter.
+        (resp.transaction_registered is a stub returning fixed text, so we
+        assert the args it receives.)"""
         from app.agents.builders import build_transaction_response
+
+        captured = {}
+
+        def fake_formatter(tx_type, amount, category, description, transaction_date=None):
+            captured.update(
+                {
+                    "tx_type": tx_type,
+                    "amount": amount,
+                    "category": category,
+                    "description": description,
+                    "transaction_date": transaction_date,
+                }
+            )
+            return "✅ Transação registrada com sucesso!"
+
+        monkeypatch.setattr(
+            "app.agents.builders.resp.transaction_registered", fake_formatter
+        )
 
         state = _state(
             intent=IntentType.REGISTER_EXPENSE.value,
@@ -58,11 +79,19 @@ class TestBuildTransactionResponse:
             },
         )
         result = build_transaction_response(state)
-        assert "R$ 50,00" in result
-        assert "Alimentação" in result
+        assert result == "✅ Transação registrada com sucesso!"
+        assert captured["amount"] == 50.0
+        assert captured["category"] == "Alimentação"
+        assert captured["description"] == "Mercado"
+        assert captured["tx_type"] == "EXPENSE"
 
-    def test_expense_with_alerts_appends_alert_text(self):
+    def test_expense_with_alerts_appends_alert_text(self, monkeypatch):
         from app.agents.builders import build_transaction_response
+
+        monkeypatch.setattr(
+            "app.agents.builders.resp.transaction_registered",
+            lambda *a, **kw: "✅ Transação registrada com sucesso!",
+        )
 
         state = _state(
             intent=IntentType.REGISTER_EXPENSE.value,
@@ -76,8 +105,12 @@ class TestBuildTransactionResponse:
         from app.agents.builders import build_transaction_response
 
         monkeypatch.setattr(
+            "app.agents.builders.resp.transaction_registered",
+            lambda *a, **kw: "✅ Transação registrada com sucesso!",
+        )
+        monkeypatch.setattr(
             "app.agents.builders.sync_session_maker",
-            lambda: None,
+            lambda: type("DB", (), {"close": lambda self: None})(),
         )
         monkeypatch.setattr(
             "app.agents.builders.get_or_create_user",
@@ -103,7 +136,14 @@ class TestBuildTransactionResponse:
     def test_income_no_active_goals_no_suggestion(self, monkeypatch):
         from app.agents.builders import build_transaction_response
 
-        monkeypatch.setattr("app.agents.builders.sync_session_maker", lambda: None)
+        monkeypatch.setattr(
+            "app.agents.builders.resp.transaction_registered",
+            lambda *a, **kw: "✅ Transação registrada com sucesso!",
+        )
+        monkeypatch.setattr(
+            "app.agents.builders.sync_session_maker",
+            lambda: type("DB", (), {"close": lambda self: None})(),
+        )
         monkeypatch.setattr(
             "app.agents.builders.get_or_create_user",
             lambda phone, db: type("U", (), {"name": "Ana"})(),
@@ -169,7 +209,10 @@ class TestBuildGreetingResponse:
     def test_greeting_includes_name(self, monkeypatch):
         from app.agents.builders import build_greeting_response
 
-        monkeypatch.setattr("app.agents.builders.sync_session_maker", lambda: None)
+        monkeypatch.setattr(
+            "app.agents.builders.sync_session_maker",
+            lambda: type("DB", (), {"close": lambda self: None})(),
+        )
         monkeypatch.setattr(
             "app.agents.builders.get_or_create_user",
             lambda phone, db: type("U", (), {"name": "Carlos"})(),
@@ -182,7 +225,10 @@ class TestBuildGreetingResponse:
     def test_greeting_without_name(self, monkeypatch):
         from app.agents.builders import build_greeting_response
 
-        monkeypatch.setattr("app.agents.builders.sync_session_maker", lambda: None)
+        monkeypatch.setattr(
+            "app.agents.builders.sync_session_maker",
+            lambda: type("DB", (), {"close": lambda self: None})(),
+        )
         # User without name
         monkeypatch.setattr(
             "app.agents.builders.get_or_create_user",
