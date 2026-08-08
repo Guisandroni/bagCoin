@@ -1,7 +1,8 @@
-"""Tool-agent node handlers: registration, smart query, smart manage."""
+"""Tool-agent node handler for Transação registration."""
 
 import logging
 
+from app.agents.nodes.tool_context import tool_history
 from app.agents.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -9,13 +10,6 @@ logger = logging.getLogger(__name__)
 
 def register_agent_node(state: AgentState) -> AgentState:
     """Tool-based transaction registration agent with confirmation-first behavior."""
-    from app.core.config import settings
-
-    if not settings.USE_TOOL_AGENTS:
-        from app.agents.nodes.finance import extract_data_node
-
-        return extract_data_node(state)
-
     from app.agents.tool_agent import run_tool_agent
     from app.agents.tools import create_financial_tools
     from app.services.llm_service import get_llm
@@ -51,7 +45,7 @@ Regras:
             tools=create_financial_tools(phone_number, state.get("context") or {}),
             system_prompt=system_prompt,
             user_message=message,
-            history=_tool_history(phone_number, limit=4),
+            history=tool_history(phone_number, limit=4),
             max_iterations=3,
         )
     except Exception as exc:
@@ -61,10 +55,3 @@ Regras:
             "Pode tentar de novo com valor, descricao e se foi gasto ou receita?"
         )
     return state
-
-
-def _tool_history(phone_number: str, limit: int = 6) -> str:
-    """Format recent conversation history for tool-agent context."""
-    from app.services.agent_memory_service import build_agent_context_text
-
-    return build_agent_context_text(phone_number, message_limit=limit) or ""

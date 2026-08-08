@@ -157,7 +157,6 @@ class Settings(BaseSettings):
     HUMANIZE_RESPONSES: bool = False
     HUMANIZE_MAX_CHARS: int = 500
     HUMANIZE_ALLOWED_INTENTS_EXTRA: list[str] = []
-    USE_TOOL_AGENTS: bool = True
     LLM_EXTRACT_TIMEOUT: float = 4.0
     IMAGE_STRUCTURED_EXTRACT: bool = True
     ECHO_AUDIO_TRANSCRIPTION: bool = False

@@ -11,7 +11,6 @@ from app.agents.multimodal import (
 )
 from app.agents.multimodal_types import MultimodalResult
 
-
 # =====================================================================
 # _parse_json_object — tolerates fenced / embedded JSON
 # =====================================================================
@@ -141,10 +140,8 @@ def test_process_multimodal_sets_image_structured_in_context(monkeypatch, fake_i
     assert result["context"]["media_provider"] == "groq_llama4"
 
 
-def test_process_multimodal_rejects_non_receipt_image(monkeypatch, fake_image_media):
-    """Non-receipt image should set a response asking for proper input."""
-    monkeypatch.setattr("app.agents.multimodal.settings.USE_TOOL_AGENTS", False)
-    monkeypatch.setattr("app.agents.multimodal.record_memory_event_for_phone", lambda *_, **__: None)
+def test_process_multimodal_preserves_non_receipt_image_for_document_agent(monkeypatch, fake_image_media):
+    """Non-receipt images continue through the tool-agent document path."""
     monkeypatch.setattr(
         "app.agents.multimodal.process_image",
         lambda m: MultimodalResult(
@@ -155,8 +152,9 @@ def test_process_multimodal_rejects_non_receipt_image(monkeypatch, fake_image_me
     )
     state = _state_with_image(fake_image_media)
     result = process_multimodal(state)
-    assert "não consegui processar essa imagem" in result["response"].lower()
-    assert "documento financeiro aceito" in result["response"].lower()
+    assert result["context"]["image_structured"]["is_receipt"] is False
+    assert result["context"]["original_format"] == "image"
+    assert result["response"] is None
 
 
 def test_process_multimodal_image_failure_sets_error(monkeypatch, fake_image_media):

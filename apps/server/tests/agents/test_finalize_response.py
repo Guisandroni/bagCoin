@@ -1,6 +1,6 @@
 """Unit tests for orchestrator final response persistence."""
 
-from app.agents.orchestrator import build_response_node, finalize_response_node
+from app.agents.nodes.chat import build_response_node, finalize_response_node
 from app.schemas.enums import IntentType
 
 

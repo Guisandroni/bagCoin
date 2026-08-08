@@ -4,12 +4,10 @@ Each builder is a function (AgentState) -> str that formats a response
 for a specific intent. Tests verify the right text is produced for known inputs.
 """
 
-import pytest
 from typing import Any, cast
 
 from app.agents.state import AgentState
 from app.schemas.enums import IntentType
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -328,21 +326,21 @@ class TestBuildFallbackResponse:
 
 class TestBuildResponseNodeDispatcher:
     def test_bracket_message_passthrough(self, monkeypatch):
-        from app.agents.orchestrator import build_response_node
+        from app.agents.nodes.chat import build_response_node
 
         state = _state(message="[erro interno]", response=None)
         result = build_response_node(dict(state))
         assert result["response"] == "erro interno"
 
     def test_keeps_existing_response(self, monkeypatch):
-        from app.agents.orchestrator import build_response_node
+        from app.agents.nodes.chat import build_response_node
 
         state = _state(intent=IntentType.HELP.value, response="resposta pronta")
         result = build_response_node(dict(state))
         assert result["response"] == "resposta pronta"
 
     def test_error_uses_error_message(self, monkeypatch):
-        from app.agents.orchestrator import build_response_node
+        from app.agents.nodes.chat import build_response_node
 
         state = _state(error="media_failure:unknown", message="oi")
         result = build_response_node(dict(state))
@@ -350,7 +348,7 @@ class TestBuildResponseNodeDispatcher:
         assert "erro" in response.lower() or len(response) > 0
 
     def test_dispatches_to_intent_builder(self, monkeypatch):
-        from app.agents.orchestrator import build_response_node
+        from app.agents.nodes.chat import build_response_node
 
         state = _state(
             intent=IntentType.QUERY_DATA.value,
@@ -362,7 +360,7 @@ class TestBuildResponseNodeDispatcher:
     def test_import_summary_wins_for_unknown_intent(self, monkeypatch):
         """Old code: import_summary beat the LLM fallback for intents without a
         dedicated branch. The dispatcher must preserve that."""
-        from app.agents.orchestrator import build_response_node
+        from app.agents.nodes.chat import build_response_node
 
         state = _state(
             intent=IntentType.CHAT.value,
@@ -372,7 +370,7 @@ class TestBuildResponseNodeDispatcher:
         assert result["response"] == "10 transações importadas."
 
     def test_import_statement_with_summary_uses_builder(self, monkeypatch):
-        from app.agents.orchestrator import build_response_node
+        from app.agents.nodes.chat import build_response_node
 
         state = _state(
             intent=IntentType.IMPORT_STATEMENT.value,

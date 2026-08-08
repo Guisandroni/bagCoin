@@ -1,6 +1,6 @@
 """Chat and help system prompts for the BagCoin chatbot.
 
-Extracted from app.agents.orchestrator.chat_node()
+Used by app.agents.nodes.chat.chat_node().
 """
 
 CHAT_SYSTEM_PROMPT = """Você é o BagCoin, um assistente financeiro amigável que conversa via WhatsApp.

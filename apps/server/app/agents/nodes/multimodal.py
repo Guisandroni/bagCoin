@@ -1,10 +1,10 @@
 """Multimodal node handlers: media processing, document analysis, receipt confirmation."""
 
 import logging
+from typing import cast
 
 from app.agents.multimodal import process_multimodal
 from app.agents.state import AgentState
-from app.agents.statement_parser import detect_statement
 from app.agents.tenant_context import tenant_phone_error
 from app.agents.tools.documents import create_document_tools
 from app.schemas.enums import IntentType
@@ -18,7 +18,7 @@ def process_multimodal_node(state: AgentState) -> AgentState:
     if terr:
         s = dict(state)
         s["error"] = terr
-        return AgentState(**s)
+        return cast(AgentState, s)
 
     # Web ↔ bot pairing (same entry as multimodal; text-only)
     from app.services.integration_service import try_consume_link_pairing_sync
@@ -41,13 +41,11 @@ def process_multimodal_node(state: AgentState) -> AgentState:
         if reply is not None:
             s = dict(state)
             s["response"] = reply
-            return AgentState(**s)
+            return cast(AgentState, s)
 
     logger.info(f"Processando mídia: {state.get('source_format', 'text')}")
     result = process_multimodal(dict(state))
-    if result.get("error"):
-        return AgentState(**result)
-    return AgentState(**result)
+    return cast(AgentState, result)
 
 
 def document_agent_node(state: AgentState) -> AgentState:
@@ -63,7 +61,7 @@ def document_agent_node(state: AgentState) -> AgentState:
     except Exception as exc:
         logger.exception("[document_agent] failed")
         result["error"] = f"Erro ao analisar documento: {exc}"
-    return AgentState(**result)
+    return cast(AgentState, result)
 
 
 def receipt_confirm_node(state: AgentState) -> AgentState:
@@ -88,7 +86,7 @@ def receipt_confirm_node(state: AgentState) -> AgentState:
             state["phone_number"],
             channel,
         )
-        return AgentState(**result)
+        return cast(AgentState, result)
 
     tx_type = _receipt_transaction_type(structured) or "EXPENSE"
     tx_params, summary = _build_receipt_transaction_confirmation(structured, tx_type)
@@ -101,4 +99,4 @@ def receipt_confirm_node(state: AgentState) -> AgentState:
         summary=summary,
         channel=channel,
     )
-    return AgentState(**result)
+    return cast(AgentState, result)

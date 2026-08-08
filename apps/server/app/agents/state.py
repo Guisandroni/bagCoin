@@ -10,6 +10,7 @@ class AgentState(TypedDict):
     user_id: int | None
     message: str
     intent: str | None
+    macro_intent: str | None
     extracted_data: dict[str, Any] | None
     query_result: dict[str, Any] | None
     report_id: int | None

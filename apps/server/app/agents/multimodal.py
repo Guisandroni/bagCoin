@@ -13,14 +13,12 @@ import os
 import tempfile
 import time
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Literal
 
 from groq import Groq
 
 from app.agents.multimodal_types import MultimodalResult
 from app.agents.prompts.image_receipt import IMAGE_RECEIPT_PROMPT
-from app.agents import responses as resp
-from app.services.agent_memory_service import record_memory_event_for_phone
 from app.core.config import settings
 from app.services.docx_text import extract_docx_text
 
@@ -136,7 +134,7 @@ def process_audio(media: dict[str, Any]) -> MultimodalResult:
         )
 
 
-def _audio_confidence(text: str, duration: float | None) -> tuple[str, str | None]:
+def _audio_confidence(text: str, duration: float | None) -> tuple[Literal["normal", "low"], str | None]:
     """Classify transcription confidence using simple deterministic guards."""
     text_clean = (text or "").strip()
     if len(text_clean) < 3:
@@ -493,12 +491,7 @@ def process_multimodal(state: dict[str, Any]) -> dict[str, Any]:
         result = MultimodalResult(text="", failure=True, reason="unknown_format")
     result = _coerce_result(result, source_format)
 
-    if (
-        result.is_failure
-        and source_format == "document"
-        and result.reason == "pdf_empty"
-        and settings.USE_TOOL_AGENTS
-    ):
+    if result.is_failure and source_format == "document" and result.reason == "pdf_empty":
         state["context"] = state.get("context", {})
         state["context"]["extracted_media_text"] = ""
         state["context"]["original_format"] = source_format
@@ -513,23 +506,6 @@ def process_multimodal(state: dict[str, Any]) -> dict[str, Any]:
     if result.confidence == "low":
         state["error"] = f"media_low_confidence:{result.reason or 'unknown'}"
         state["response"] = _low_confidence_message(source_format, result.reason)
-        return state
-
-    if (
-        source_format == "image"
-        and result.structured is not None
-        and not result.structured.get("is_receipt", True)
-        and not settings.USE_TOOL_AGENTS
-    ):
-        record_memory_event_for_phone(
-            state.get("phone_number", ""),
-            event_type="non_financial_media_received",
-            entity_type="media",
-            source="image",
-            summary="Imagem sem conteúdo financeiro aceita pelo BagCoin.",
-            payload={"structured": result.structured, "provider": result.provider},
-        )
-        state["response"] = resp.non_financial_media("image")
         return state
 
     state["message"] = result.text

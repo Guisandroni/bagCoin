@@ -1,12 +1,14 @@
 """Direct agent tests for category, transaction, and budget creation."""
 
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.db.models  # noqa: F401
+from app.agents.state import AgentState
 from app.db.base import Base
 from app.db.models.agent_log import AgentLog
 from app.db.models.agent_memory_event import AgentMemoryEvent
@@ -454,14 +456,12 @@ def test_tool_budget_spent_updates_after_expense_confirmation(monkeypatch):
 
 def test_register_tool_agent_failure_does_not_fake_save(monkeypatch):
     factory = _patch_agent_db(monkeypatch)
-    from app.agents.orchestrator import register_agent_node
-    from app.core.config import settings
+    from app.agents.nodes.register import register_agent_node
 
     class BrokenToolLLM:
         def bind_tools(self, _tools):
             raise RuntimeError("tools unsupported")
 
-    monkeypatch.setattr(settings, "USE_TOOL_AGENTS", True)
     monkeypatch.setattr("app.services.llm_service.get_llm", lambda *_, **__: BrokenToolLLM())
 
     state = {
@@ -600,7 +600,7 @@ def test_tool_goal_update_and_delete_use_fixed_messages(monkeypatch):
 
 
 def test_agent_manage_blocks_account_creation(monkeypatch):
-    from app.agents.orchestrator import smart_manage_node
+    from app.agents.nodes.smart import smart_manage_node
 
     monkeypatch.setattr("app.agents.nodes.smart.get_llm", lambda *_, **__: None)
 
@@ -618,7 +618,7 @@ def test_agent_manage_blocks_account_creation(monkeypatch):
 
 def test_agent_manage_prepares_budget_without_llm(monkeypatch):
     factory = _patch_agent_db(monkeypatch)
-    from app.agents.orchestrator import smart_manage_tool_node
+    from app.agents.nodes.smart import smart_manage_node
     from app.agents.pending_actions import load_pending_action
 
     monkeypatch.setattr("app.agents.nodes.smart.get_llm", lambda *_, **__: None)
@@ -631,7 +631,7 @@ def test_agent_manage_prepares_budget_without_llm(monkeypatch):
         "context": {"channel": "whatsapp"},
     }
 
-    result = smart_manage_tool_node(state)
+    result = smart_manage_node(state)
 
     assert result["response"].startswith(
         "📊 Orçamento de R$ 4.000,00 na categoria Alimentação a cada 30 dias no dia "
@@ -644,7 +644,7 @@ def test_agent_manage_prepares_budget_without_llm(monkeypatch):
 
 
 def test_agent_manage_blocks_credit_card_creation(monkeypatch):
-    from app.agents.orchestrator import smart_manage_node
+    from app.agents.nodes.smart import smart_manage_node
 
     monkeypatch.setattr("app.agents.nodes.smart.get_llm", lambda *_, **__: None)
 
@@ -660,8 +660,34 @@ def test_agent_manage_blocks_credit_card_creation(monkeypatch):
     assert "orçamento por categoria" in result["response"]
 
 
+def test_tool_agent_is_the_only_execution_policy():
+    from app.agents.routing import route_by_intent
+    from app.core.config import settings
+
+    assert not hasattr(settings, "USE_TOOL_AGENTS")
+    assert route_by_intent(
+        cast(
+            AgentState,
+            {
+                "message": "gastei 20 no mercado",
+                "intent": "register_expense",
+                "macro_intent": "register",
+                "error": None,
+                "response": None,
+            },
+        )
+    ) == "register_agent"
+
+
+def test_graph_has_no_direct_transaction_nodes():
+    from app.agents.graph import orchestrator
+
+    nodes = set(orchestrator.get_graph().nodes)
+    assert not {"extract_data", "save_transaction", "check_alerts"} & nodes
+
+
 def test_route_by_intent_sends_account_request_to_blocker():
-    from app.agents.orchestrator import route_by_intent
+    from app.agents.routing import route_by_intent
 
     state = {
         "message": "Criar conta Nubank com saldo 1000",
@@ -671,14 +697,12 @@ def test_route_by_intent_sends_account_request_to_blocker():
         "response": None,
     }
 
-    assert route_by_intent(state) == "smart_manage"
+    assert route_by_intent(cast(AgentState, state)) == "smart_manage"
 
 
 def test_route_after_multimodal_sends_documents_to_document_tool(monkeypatch):
-    from app.agents.orchestrator import route_after_multimodal
-    from app.core.config import settings
+    from app.agents.routing import route_after_multimodal
 
-    monkeypatch.setattr(settings, "USE_TOOL_AGENTS", True)
     monkeypatch.setattr("app.agents.routing.has_pending_confirmation_message", lambda *_: False)
 
     state = {
@@ -690,7 +714,7 @@ def test_route_after_multimodal_sends_documents_to_document_tool(monkeypatch):
         "context": {"original_format": "document"},
     }
 
-    assert route_after_multimodal(state) == "document_agent"
+    assert route_after_multimodal(cast(AgentState, state)) == "document_agent"
 
 
 def test_agent_category_aliases_do_not_explode_categories(monkeypatch):
@@ -839,7 +863,7 @@ def test_pending_document_import_uses_existing_unified_user_by_phone_digits(monk
 
     assert response is not None
     with factory() as db:
-        tx = db.query(Transaction).one()
+        assert db.query(Transaction).one() is not None
 
 
 def test_agent_lists_unified_user_transactions(monkeypatch):

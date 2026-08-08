@@ -10,7 +10,6 @@ import unicodedata
 from app.agents.pending_actions import has_pending_confirmation_message
 from app.agents.state import AgentState
 from app.agents.statement_parser import detect_statement
-from app.core.config import settings
 from app.schemas.enums import IntentType
 
 logger = logging.getLogger(__name__)
@@ -53,7 +52,7 @@ def route_after_multimodal(state: AgentState) -> str:
         return "build_response"
     if state.get("response"):
         return "build_response"
-    if settings.USE_TOOL_AGENTS and has_pending_confirmation_message(
+    if has_pending_confirmation_message(
         state.get("phone_number", ""),
         state.get("message", ""),
     ):
@@ -73,7 +72,7 @@ def route_after_multimodal(state: AgentState) -> str:
     ):
         logger.info("Recibo identificado na imagem. Criando confirmação de registro.")
         return "receipt_confirm"
-    if settings.USE_TOOL_AGENTS and original_format in {"document", "image"}:
+    if original_format in {"document", "image"}:
         logger.info("Mídia financeira será analisada pela tool de documentos.")
         return "document_agent"
     if state.get("source_format") == "document" and detect_statement(dict(state)):
@@ -104,9 +103,7 @@ def route_by_intent(state: AgentState) -> str:
 
     # === Macro-intent routing ===
     if macro == "register":
-        if settings.USE_TOOL_AGENTS:
-            return "register_agent"
-        return "extract_data"
+        return "register_agent"
 
     if macro == "query":
         return "smart_query"
@@ -128,8 +125,8 @@ def route_by_intent(state: AgentState) -> str:
 
     # Fallback routing for states that still carry only the detailed intent.
     routing_map = {
-        IntentType.REGISTER_EXPENSE.value: "register_agent" if settings.USE_TOOL_AGENTS else "extract_data",
-        IntentType.REGISTER_INCOME.value: "register_agent" if settings.USE_TOOL_AGENTS else "extract_data",
+        IntentType.REGISTER_EXPENSE.value: "register_agent",
+        IntentType.REGISTER_INCOME.value: "register_agent",
         IntentType.QUERY_DATA.value: "smart_query",
         IntentType.GENERATE_REPORT.value: "generate_report",
         IntentType.RECOMMENDATION.value: "generate_recommendations",
@@ -156,4 +153,4 @@ def route_by_intent(state: AgentState) -> str:
         IntentType.UPDATE_CATEGORY.value: "smart_manage",
         IntentType.UNKNOWN.value: "chat",
     }
-    return routing_map.get(intent, "chat")
+    return routing_map.get(intent or "", "chat")

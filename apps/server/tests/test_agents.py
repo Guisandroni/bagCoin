@@ -43,7 +43,7 @@ class TestDeduplicationService:
     @patch("app.services.deduplication_service.get_user_transactions")
     def test_is_duplicate_fuzzy_match(self, mock_get_tx):
         """Similar descriptions (85%+) = dedup.
-        
+
         'Mercado São Paulo' vs 'Mercado São Paulo Extra' — 86% match.
         """
         mock_get_tx.return_value = [
@@ -54,7 +54,7 @@ class TestDeduplicationService:
     @patch("app.services.deduplication_service.get_user_transactions")
     def test_is_duplicate_fuzzy_match_supermercado(self, mock_get_tx):
         """'Supermercado Cidades' vs 'Supermercado Cidades Jardim' = dedup.
-        
+
         Ratio: 85.1% >= 85% threshold.
         """
         mock_get_tx.return_value = [
@@ -219,7 +219,7 @@ class TestIntegrationPairingMultimodalNode:
     @patch("app.agents.nodes.multimodal.process_multimodal")
     @patch("app.services.integration_service.try_consume_link_pairing_sync")
     def test_pairing_fast_path_skips_multimodal(self, mock_consume, mock_multimodal):
-        from app.agents.orchestrator import process_multimodal_node
+        from app.agents.nodes.multimodal import process_multimodal_node
 
         tok = "a1b2c3d4e5f6g7h8i9j0kl"
         state = self._minimal_agent_state(
@@ -235,7 +235,7 @@ class TestIntegrationPairingMultimodalNode:
     @patch("app.agents.nodes.multimodal.process_multimodal")
     @patch("app.services.integration_service.try_consume_link_pairing_sync")
     def test_normal_message_still_calls_multimodal(self, mock_consume, mock_multimodal):
-        from app.agents.orchestrator import process_multimodal_node
+        from app.agents.nodes.multimodal import process_multimodal_node
 
         mock_consume.return_value = None
         mock_multimodal.return_value = self._minimal_agent_state(

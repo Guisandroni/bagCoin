@@ -13,7 +13,7 @@ import secrets
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import FileResponse
 
-from app.agents.orchestrator import orchestrator
+from app.agents.graph import orchestrator
 from app.agents.persistence import get_or_create_user_sync
 from app.agents.tenant_context import tenant_phone_error
 from app.api.deps import verify_api_key as verify_telegram_api_key
