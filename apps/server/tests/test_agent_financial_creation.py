@@ -679,7 +679,7 @@ def test_route_after_multimodal_sends_documents_to_document_tool(monkeypatch):
     from app.core.config import settings
 
     monkeypatch.setattr(settings, "USE_TOOL_AGENTS", True)
-    monkeypatch.setattr("app.agents.orchestrator.has_pending_confirmation_message", lambda *_: False)
+    monkeypatch.setattr("app.agents.routing.has_pending_confirmation_message", lambda *_: False)
 
     state = {
         "phone_number": "5511999999999",

@@ -14,16 +14,8 @@ from langgraph.graph import END, StateGraph
 from app.agents import responses as resp
 from app.agents.budget_goal import (
     check_alerts_node,
-    contribute_goal_node,
-    create_budget_node,
-    create_goal_node,
-    delete_budget_node,
-    delete_goal_node,
     delete_transaction_node,
-    query_budgets_node,
     toggle_alerts_node,
-    update_budget_node,
-    update_goal_node,
     update_transaction_node,
 )
 from app.agents.deep_research import deep_research
@@ -228,59 +220,10 @@ def deep_research_node(state: AgentState) -> AgentState:
     return AgentState(**result)
 
 
-def budget_node(state: AgentState) -> AgentState:
-    """Nó de criação de orçamento."""
-    logger.info("Criando orçamento")
-    result = create_budget_node(dict(state))
-    return AgentState(**result)
-
-
-def goal_node(state: AgentState) -> AgentState:
-    """Nó de criação de meta."""
-    logger.info("Criando meta")
-    result = create_goal_node(dict(state))
-    return AgentState(**result)
-
-
 def alerts_node(state: AgentState) -> AgentState:
     """Nó de verificação de alertas após transação."""
     logger.info("Verificando alertas")
     result = check_alerts_node(dict(state))
-    return AgentState(**result)
-
-
-def budgets_query_node(state: AgentState) -> AgentState:
-    """Nó de consulta de orçamentos/metas."""
-    logger.info("Consultando budgets/goals")
-    result = query_budgets_node(dict(state))
-    return AgentState(**result)
-
-
-def update_budget_handler_node(state: AgentState) -> AgentState:
-    """Nó de atualização de orçamento."""
-    logger.info("Atualizando budget")
-    result = update_budget_node(dict(state))
-    return AgentState(**result)
-
-
-def contribute_goal_handler_node(state: AgentState) -> AgentState:
-    """Nó de contribuição para meta."""
-    logger.info("Contribuindo para meta")
-    result = contribute_goal_node(dict(state))
-    return AgentState(**result)
-
-
-def delete_goal_handler_node(state: AgentState) -> AgentState:
-    """Nó de exclusão de meta."""
-    logger.info("Excluindo meta")
-    result = delete_goal_node(dict(state))
-    return AgentState(**result)
-
-
-def update_goal_handler_node(state: AgentState) -> AgentState:
-    """Nó de atualização de meta."""
-    logger.info("Atualizando meta")
-    result = update_goal_node(dict(state))
     return AgentState(**result)
 
 
@@ -820,13 +763,6 @@ def correction_handler_node(state: AgentState) -> AgentState:
     return state
 
 
-def delete_budget_handler_node(state: AgentState) -> AgentState:
-    """Nó de exclusão de orçamentos."""
-    logger.info("Excluindo budgets")
-    result = delete_budget_node(dict(state))
-    return AgentState(**result)
-
-
 def toggle_alerts_handler_node(state: AgentState) -> AgentState:
     """Nó de ativar/desativar alertas."""
     logger.info("Toggling alerts")
@@ -1232,25 +1168,21 @@ Responda APENAS JSON:
 
         logger.info(f"[smart_manage] LLM action={action} em {latency:.0f}ms")
 
-        # Roteia para o handler especifico
-        if action == "create_budget":
-            state["extracted_data"] = params
-            return budget_node(state)
-        elif action == "create_goal":
-            state["extracted_data"] = params
-            return goal_node(state)
-        elif action == "delete_budget":
-            state["extracted_data"] = {"name": params.get("budget_name", "")}
-            return delete_budget_handler_node(state)
-        elif action == "delete_goal":
-            state["extracted_data"] = {"title": params.get("goal_name", "")}
-            return delete_goal_handler_node(state)
-        elif action == "update_budget":
-            state["extracted_data"] = {"name": params.get("budget_name", ""), "total_limit": params.get("new_limit", 0)}
-            return update_budget_handler_node(state)
-        elif action == "contribute_goal":
-            state["extracted_data"] = {"title": params.get("goal_name", ""), "amount": params.get("amount", 0)}
-            return contribute_goal_handler_node(state)
+        # Budget/goal são tratados pelo caminho tool-agent (ADR-0001).
+        # O legacy path só mantém transaction/category/toggle_alerts.
+        if action in {
+            "create_budget",
+            "create_goal",
+            "delete_budget",
+            "delete_goal",
+            "update_budget",
+            "contribute_goal",
+        }:
+            state["response"] = (
+                "Essa ação é gerenciada pelo assistente moderno. "
+                "Me diga o que quer fazer e eu ajudo: criar orçamento, meta, "
+                "ou ajustar transações."
+            )
         elif action == "delete_transaction":
             state["extracted_data"] = {"description": params.get("description", "")}
             return delete_transaction_handler_node(state)
@@ -1577,14 +1509,6 @@ def create_orchestrator():
     workflow.add_node("generate_recommendations", generate_recommendations_node)
     workflow.add_node("deep_research", deep_research_node)
     workflow.add_node("import_statement", import_statement_node)
-    workflow.add_node("create_budget", budget_node)
-    workflow.add_node("create_goal", goal_node)
-    workflow.add_node("query_budgets", budgets_query_node)
-    workflow.add_node("delete_budget", delete_budget_handler_node)
-    workflow.add_node("update_budget", update_budget_handler_node)
-    workflow.add_node("contribute_goal", contribute_goal_handler_node)
-    workflow.add_node("delete_goal", delete_goal_handler_node)
-    workflow.add_node("update_goal", update_goal_handler_node)
     workflow.add_node("delete_transaction", delete_transaction_handler_node)
     workflow.add_node("update_transaction", update_transaction_handler_node)
     workflow.add_node("introduce", intro_handler_node)
@@ -1631,14 +1555,6 @@ def create_orchestrator():
             "generate_report": "generate_report",
             "generate_recommendations": "generate_recommendations",
             "deep_research": "deep_research",
-            "create_budget": "create_budget",
-            "create_goal": "create_goal",
-            "query_budgets": "query_budgets",
-            "delete_budget": "delete_budget",
-            "update_budget": "update_budget",
-            "contribute_goal": "contribute_goal",
-            "delete_goal": "delete_goal",
-            "update_goal": "update_goal",
             "delete_transaction": "delete_transaction",
             "update_transaction": "update_transaction",
             "introduce": "introduce",
@@ -1666,14 +1582,6 @@ def create_orchestrator():
     workflow.add_edge("generate_recommendations", "build_response")
     workflow.add_edge("deep_research", "build_response")
     workflow.add_edge("import_statement", "build_response")
-    workflow.add_edge("create_budget", "build_response")
-    workflow.add_edge("create_goal", "build_response")
-    workflow.add_edge("query_budgets", "build_response")
-    workflow.add_edge("delete_budget", "build_response")
-    workflow.add_edge("update_budget", "build_response")
-    workflow.add_edge("contribute_goal", "build_response")
-    workflow.add_edge("delete_goal", "build_response")
-    workflow.add_edge("update_goal", "build_response")
     workflow.add_edge("delete_transaction", "build_response")
     workflow.add_edge("update_transaction", "build_response")
     workflow.add_edge("introduce", "build_response")
