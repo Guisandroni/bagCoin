@@ -51,7 +51,7 @@ export function useCreateCategory() {
     },
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_CREATE_CATEGORY)
-      toast.error(err.message || "Erro ao criar categoria", { id: TOAST_ID_CREATE_CATEGORY })
+      toast.error("Não foi possível criar a categoria. Tente novamente.", { id: TOAST_ID_CREATE_CATEGORY })
     },
   })
 }
@@ -72,7 +72,7 @@ export function useUpdateCategory() {
     },
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_UPDATE_CATEGORY)
-      toast.error(err.message || "Erro ao atualizar categoria", { id: TOAST_ID_UPDATE_CATEGORY })
+      toast.error("Não foi possível atualizar a categoria. Tente novamente.", { id: TOAST_ID_UPDATE_CATEGORY })
     },
   })
 }
@@ -92,7 +92,7 @@ export function useDeleteCategory() {
     },
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_DELETE_CATEGORY)
-      toast.error(err.message || "Erro ao excluir categoria", { id: TOAST_ID_DELETE_CATEGORY })
+      toast.error("Não foi possível excluir a categoria. Tente novamente.", { id: TOAST_ID_DELETE_CATEGORY })
     },
   })
 }

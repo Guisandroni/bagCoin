@@ -17,9 +17,9 @@ from app.main import app
 class MockTransaction:
     """Mock transaction for testing."""
 
-    def __init__(self, tx_id=1, user_uuid=None):
+    def __init__(self, tx_id=1, user_id=None):
         self.id = tx_id
-        self.user_uuid = user_uuid or uuid4()
+        self.user_id = user_id or 1
         self.user_id = None
         self.type = "EXPENSE"
         self.amount = 100.0
@@ -38,7 +38,7 @@ class MockUser:
     """Mock authenticated user."""
 
     def __init__(self):
-        self.id = uuid4()
+        self.id = 1
         self.email = "test@example.com"
         self.full_name = "Test User"
         self.is_active = True
@@ -303,6 +303,38 @@ async def test_export_transactions_csv(client_with_auth):
 
 
 @pytest.mark.anyio
+async def test_export_financial_csv_consolidated_endpoint(client_with_auth):
+    """Test consolidated financial CSV endpoint for authenticated user."""
+    from unittest.mock import patch
+
+    csv_content = (
+        "seção,id,data,nome,descrição,categoria,tipo,valor,status,origem,recorrente,frequência,"
+        "valor atual,valor alvo,limite,gasto,restante,período,quantidade de transações,"
+        "valor total de despesas,valor total de receitas,saldo da categoria\n"
+        "Transações,1,12/05/2026,Freela,Freela,Salário,receita,\"1200,00\",confirmada,manual,não,,,,,,,,,,,\n"
+        "Metas,2,31/10/2026,Notebook,,,,,ativa,,,,\"1000,00\",\"5000,00\",,,,,,,\n"
+        "Orçamentos,3,01/05/2026,Mercado,,Mercado,orçamento,,,,,,,,\"900,00\",\"250,00\",\"650,00\",mensal,,,,\n"
+        "Categorias mais utilizadas,,,Mercado,,Mercado,,,,,,,,,,,,,1,\"250,00\",\"0,00\",\"'-250,00\"\n"
+    )
+
+    with patch(
+        "app.api.routes.v1.exports.export_financial_csv_for_user",
+        new_callable=AsyncMock,
+    ) as mock_export:
+        mock_export.return_value = csv_content
+
+        response = await client_with_auth.get(f"{settings.API_V1_STR}/bagcoin/export.csv")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert response.headers.get("content-disposition") == 'attachment; filename="bagcoin-financeiro.csv"'
+    assert "Transações" in response.text
+    assert "Metas" in response.text
+    assert "Orçamentos" in response.text
+    assert "Categorias mais utilizadas" in response.text
+
+
+@pytest.mark.anyio
 async def test_list_transactions_pagination(client_with_auth):
     """Test pagination parameters are passed to the service."""
     from app.api.routes.v1.transactions import get_transaction_rest_service
@@ -450,7 +482,7 @@ async def test_get_transaction(client_with_auth, mock_user):
     from datetime import UTC, datetime
 
     # Create a mock transaction that _to_frontend_response can process
-    mock_tx = MockTransaction(tx_id=5, user_uuid=mock_user.id)
+    mock_tx = MockTransaction(tx_id=5, user_id=mock_user.id)
     mock_tx.description = "Supermercado Pão de Açúcar"
     mock_tx.amount = 287.50
     mock_tx.type = "EXPENSE"

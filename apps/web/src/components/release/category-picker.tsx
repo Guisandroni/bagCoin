@@ -10,6 +10,7 @@ interface ReleaseCategoryPickerProps {
   categories: ReleaseCategory[]
   selectedCategory: ReleaseCategory | null
   onSelect: (category: ReleaseCategory) => void
+  collapsible?: boolean
 }
 
 export function ReleaseCategoryPicker({
@@ -17,8 +18,10 @@ export function ReleaseCategoryPicker({
   categories,
   selectedCategory,
   onSelect,
+  collapsible = false,
 }: ReleaseCategoryPickerProps) {
   const [search, setSearch] = useState("")
+  const [expanded, setExpanded] = useState(!collapsible)
   const availableCategories = categories.filter((category) => category.id)
   const normalizedSearch = normalizeSearch(search)
   const filteredCategories = availableCategories.filter((category) =>
@@ -32,17 +35,19 @@ export function ReleaseCategoryPicker({
       </span>
 
       <div className="rounded-[var(--rls-radius)] border border-[var(--rls-outline-variant)] bg-[var(--rls-surface-container-lowest)] shadow-sm">
-        <button
-          type="button"
-          className="flex h-14 w-full items-center justify-between rounded-[var(--rls-radius)] px-4 text-left text-base text-[var(--rls-on-surface)]"
-        >
-          <span className={selectedCategory ? "" : "text-[var(--rls-on-surface-variant)]/60"}>
-            {selectedCategory?.name ?? "Selecionar categoria..."}
-          </span>
-          <ChevronDown className="h-5 w-5 rotate-180 text-[var(--rls-on-surface-variant)]" />
-        </button>
+        {!collapsible ? (
+          <button
+            type="button"
+            className="flex h-14 w-full items-center justify-between rounded-[var(--rls-radius)] px-4 text-left text-base text-[var(--rls-on-surface)]"
+          >
+            <span className={selectedCategory ? "" : "text-[var(--rls-on-surface-variant)]/60"}>
+              {selectedCategory?.name ?? "Selecionar categoria..."}
+            </span>
+            <ChevronDown className="h-5 w-5 rotate-180 text-[var(--rls-on-surface-variant)]" />
+          </button>
+        ) : null}
 
-        <div className="border-t border-[var(--rls-outline-variant)] p-3">
+        <div className={cn("p-3", !collapsible && "border-t border-[var(--rls-outline-variant)]")}>
           <label className="relative block">
             <span className="sr-only">Pesquisar categorias</span>
             <Search className="absolute left-1 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--rls-outline)]" />
@@ -50,12 +55,26 @@ export function ReleaseCategoryPicker({
               type="search"
               aria-label="Pesquisar categorias"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value)
+                if (collapsible) setExpanded(true)
+              }}
               placeholder="Pesquisar categorias..."
               className="h-11 w-full border-0 border-b border-[var(--rls-outline-variant)] bg-transparent px-8 text-base text-[var(--rls-on-surface)] outline-none placeholder:text-[var(--rls-on-surface-variant)]/60 focus:border-[var(--rls-primary-container)]"
             />
           </label>
 
+          {collapsible ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              className="rls-text-label-lg mt-3 text-[var(--rls-primary)]"
+            >
+              {expanded ? "Ocultar categorias" : "Ver categorias"}
+            </button>
+          ) : null}
+
+          {expanded ? (
           <div className="mt-3 flex max-h-44 flex-wrap gap-2 overflow-y-auto">
             {filteredCategories.length > 0 ? (
               filteredCategories.map((category) => {
@@ -64,7 +83,11 @@ export function ReleaseCategoryPicker({
                   <button
                     key={category.id}
                     type="button"
-                    onClick={() => onSelect(category)}
+                    onClick={() => {
+                      onSelect(category)
+                      setSearch(category.name)
+                      if (collapsible) setExpanded(false)
+                    }}
                     className={cn(
                       "flex h-9 items-center gap-1 rounded-[var(--rls-radius)] border px-3 text-sm font-semibold transition-colors",
                       isSelected
@@ -91,6 +114,7 @@ export function ReleaseCategoryPicker({
               </span>
             )}
           </div>
+          ) : null}
         </div>
       </div>
     </div>

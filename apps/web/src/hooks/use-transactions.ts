@@ -66,6 +66,8 @@ export function useTransactions(filters?: {
   search?: string
   skip?: number
   limit?: number
+  date_from?: string
+  date_to?: string
 }) {
   return useQuery<TransactionListResponse>({
     queryKey: ["transactions", filters],
@@ -75,16 +77,24 @@ export function useTransactions(filters?: {
       if (filters?.search) params.append("search", filters.search)
       if (filters?.skip !== undefined) params.append("skip", String(filters.skip))
       if (filters?.limit !== undefined) params.append("limit", String(filters.limit))
+      if (filters?.date_from) params.append("date_from", filters.date_from)
+      if (filters?.date_to) params.append("date_to", filters.date_to)
       return api.get<TransactionListResponse>(`/bagcoin/transactions?${params.toString()}`)
     },
     ...financialPollingOptions,
   })
 }
 
-export function useTransactionSummary() {
+export function useTransactionSummary(filters?: { date_from?: string; date_to?: string }) {
   return useQuery<TransactionSummary>({
-    queryKey: ["transactions", "summary"],
-    queryFn: () => api.get<TransactionSummary>("/bagcoin/transactions/summary"),
+    queryKey: ["transactions", "summary", filters],
+    queryFn: () => {
+      const params = new URLSearchParams()
+      if (filters?.date_from) params.append("date_from", filters.date_from)
+      if (filters?.date_to) params.append("date_to", filters.date_to)
+      const query = params.toString()
+      return api.get<TransactionSummary>(`/bagcoin/transactions/summary${query ? `?${query}` : ""}`)
+    },
     ...financialPollingOptions,
   })
 }
@@ -107,7 +117,7 @@ export function useCreateTransaction(options?: { silent?: boolean }) {
       toast.dismiss(TOAST_ID_CREATE_TRANSACTION)
       console.error('[hook:transactions]', err)
       if (!options?.silent) {
-        toast.error(err.message || "Erro ao criar transação", { id: TOAST_ID_CREATE_TRANSACTION })
+        toast.error("Não foi possível criar a transação. Tente novamente.", { id: TOAST_ID_CREATE_TRANSACTION })
       }
     },
   })
@@ -131,7 +141,7 @@ export function useUpdateTransaction(options?: { silent?: boolean }) {
       toast.dismiss(TOAST_ID_UPDATE_TRANSACTION)
       console.error('[hook:transactions]', err)
       if (!options?.silent) {
-        toast.error(err.message || "Erro ao atualizar transação", { id: TOAST_ID_UPDATE_TRANSACTION })
+        toast.error("Não foi possível atualizar a transação. Tente novamente.", { id: TOAST_ID_UPDATE_TRANSACTION })
       }
     },
   })
@@ -154,7 +164,7 @@ export function useDeleteTransaction(options?: { silent?: boolean }) {
       console.error('[hook:transactions]', err)
       if (!options?.silent) {
         toast.dismiss(TOAST_ID_DELETE_TRANSACTION)
-        toast.error(err.message || "Erro ao excluir transação", { id: TOAST_ID_DELETE_TRANSACTION })
+        toast.error("Não foi possível excluir a transação. Tente novamente.", { id: TOAST_ID_DELETE_TRANSACTION })
       }
     },
   })
@@ -163,7 +173,7 @@ export function useDeleteTransaction(options?: { silent?: boolean }) {
 export function useExportTransactionsCsv() {
   return useMutation({
     mutationFn: async () => {
-      const { data } = await apiClient.get("/bagcoin/transactions/export.csv", {
+      const { data } = await apiClient.get("/bagcoin/export.csv", {
         responseType: "blob",
       })
       return data as Blob
@@ -172,13 +182,13 @@ export function useExportTransactionsCsv() {
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement("a")
       anchor.href = url
-      anchor.download = "bagcoin-transacoes.csv"
+      anchor.download = "bagcoin-financeiro.csv"
       anchor.click()
       URL.revokeObjectURL(url)
       toast.success("CSV exportado com sucesso")
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Erro ao exportar CSV")
+      toast.error("Não foi possível exportar o CSV. Tente novamente.")
     },
   })
 }

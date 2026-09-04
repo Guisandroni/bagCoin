@@ -1,12 +1,8 @@
-"""Budget repository (PostgreSQL async).
+"""Budget repository (PostgreSQL async)."""
 
-Contains database operations for Budget and BudgetItem entities.
-"""
+from datetime import date
 
-from uuid import UUID
-
-from sqlalchemy import delete as sa_delete
-from sqlalchemy import select
+from sqlalchemy import delete as sa_delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -19,13 +15,8 @@ async def get_budget_by_id(
     *,
     include_items: bool = False,
 ) -> Budget | None:
-    """Get budget by ID, optionally with items."""
     if include_items:
-        query = (
-            select(Budget)
-            .options(selectinload(Budget.items))
-            .where(Budget.id == budget_id)
-        )
+        query = select(Budget).options(selectinload(Budget.items)).where(Budget.id == budget_id)
         result = await db.execute(query)
         return result.scalar_one_or_none()
     return await db.get(Budget, budget_id)
@@ -33,30 +24,25 @@ async def get_budget_by_id(
 
 async def get_budgets_by_user(
     db: AsyncSession,
-    user_uuid: UUID | None = None,
+    user_id: int,
     *,
     skip: int = 0,
     limit: int = 50,
 ) -> list[Budget]:
-    """Get budgets for a user with pagination."""
-    query = select(Budget).options(selectinload(Budget.items), selectinload(Budget.category))
-    if user_uuid:
-        query = query.where(Budget.user_uuid == user_uuid)
-    query = query.order_by(Budget.created_at.desc()).offset(skip).limit(limit)
+    query = (
+        select(Budget)
+        .options(selectinload(Budget.items), selectinload(Budget.category))
+        .where(Budget.user_id == user_id)
+        .order_by(Budget.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
     result = await db.execute(query)
     return list(result.scalars().all())
 
 
-async def count_budgets(
-    db: AsyncSession,
-    user_uuid: UUID | None = None,
-) -> int:
-    """Count budgets for a user."""
-    from sqlalchemy import func
-
-    query = select(func.count(Budget.id))
-    if user_uuid:
-        query = query.where(Budget.user_uuid == user_uuid)
+async def count_budgets(db: AsyncSession, user_id: int) -> int:
+    query = select(func.count(Budget.id)).where(Budget.user_id == user_id)
     result = await db.execute(query)
     return result.scalar() or 0
 
@@ -64,30 +50,28 @@ async def count_budgets(
 async def create_budget(
     db: AsyncSession,
     *,
-    user_id: int | None = None,
-    user_uuid: UUID | None = None,
+    user_id: int,
     category_id: int | None = None,
     name: str,
     period: str,
     total_limit: float,
+    budget_date: date,
     budget_type: str = "general",
     items: list[dict] | None = None,
 ) -> Budget:
-    """Create a new budget with optional items."""
     budget = Budget(
         user_id=user_id,
-        user_uuid=user_uuid,
         category_id=category_id,
         name=name,
         period=period,
         total_limit=total_limit,
+        budget_date=budget_date,
         budget_type=budget_type,
     )
     db.add(budget)
     await db.flush()
     await db.refresh(budget)
 
-    # Create budget items if provided
     if items:
         for item_data in items:
             item = BudgetItem(
@@ -98,7 +82,6 @@ async def create_budget(
             db.add(item)
         await db.flush()
 
-    # Reload with items
     await db.refresh(budget)
     return budget
 
@@ -109,19 +92,13 @@ async def update_budget(
     db_budget: Budget,
     update_data: dict,
 ) -> Budget:
-    """Update a budget."""
     for field, value in update_data.items():
         if field == "items":
             continue
         setattr(db_budget, field, value)
 
-    # Handle items update if provided
     if "items" in update_data and update_data["items"] is not None:
-        # Delete existing items
-        await db.execute(
-            sa_delete(BudgetItem).where(BudgetItem.budget_id == db_budget.id)
-        )
-        # Create new items
+        await db.execute(sa_delete(BudgetItem).where(BudgetItem.budget_id == db_budget.id))
         for item_data in update_data["items"]:
             item = BudgetItem(
                 budget_id=db_budget.id,
@@ -137,7 +114,6 @@ async def update_budget(
 
 
 async def delete_budget(db: AsyncSession, budget_id: int) -> bool:
-    """Delete a budget and all related items (cascades)."""
     budget = await get_budget_by_id(db, budget_id)
     if budget:
         await db.delete(budget)

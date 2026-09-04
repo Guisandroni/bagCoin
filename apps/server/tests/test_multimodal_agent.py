@@ -5,9 +5,8 @@ import io
 import json
 import zipfile
 
-from app.agents import document_understanding
-from app.agents import multimodal
-from app.agents.statement_parser import parse_statement
+from app.agents import document_understanding, multimodal
+from app.agents.statement_parser import parse_ofx, parse_pdf_statement, parse_statement
 
 
 def _docx_bytes(text: str) -> bytes:
@@ -141,6 +140,77 @@ def test_parse_statement_accepts_docx_statement():
     assert transactions[0]["amount"] == 42.10
 
 
+def test_parse_pdf_statement_handles_vertical_table_text():
+    pdf_text = "\n".join(
+        [
+            "Data",
+            "Histórico",
+            "Docto.",
+            "Crédito (R$)",
+            "Débito (R$)",
+            "Saldo (R$)",
+            "01/02/2026",
+            "TRANSFERENCIA PIX",
+            "024639",
+            "154,40",
+            "4.627,83",
+            "03/02/2026",
+            "ESTORNO",
+            "036335",
+            "1.845,57",
+            "6.473,40",
+            "04/02/2026",
+            "PGTO DARF",
+            "995711",
+            "1.792,49",
+            "5.036,32",
+            "Total Créditos",
+            "1.845,57",
+            "1.946,89",
+            "5.036,32",
+        ]
+    )
+
+    transactions = parse_pdf_statement(pdf_text)
+
+    assert [tx["type"] for tx in transactions] == ["EXPENSE", "INCOME", "EXPENSE"]
+    assert [tx["amount"] for tx in transactions] == [154.40, 1845.57, 1792.49]
+    assert transactions[0]["description"] == "TRANSFERENCIA PIX"
+    assert transactions[1]["description"] == "ESTORNO"
+    assert all(tx["amount"] != 2026 for tx in transactions)
+
+
+def test_parse_ofx_accepts_sgml_line_terminated_tags():
+    ofx_text = """
+<OFX>
+<BANKTRANLIST>
+<STMTTRN>
+<TRNTYPE>DEBIT
+<DTPOSTED>20260201
+<TRNAMT>-154.40
+<FITID>202602014639
+<MEMO>TRANSFERENCIA PIX
+</STMTTRN>
+<STMTTRN>
+<TRNTYPE>CREDIT
+<DTPOSTED>20260203
+<TRNAMT>1845.57
+<FITID>202602036335
+<MEMO>ESTORNO
+</STMTTRN>
+</BANKTRANLIST>
+</OFX>
+"""
+
+    transactions = parse_ofx(ofx_text)
+
+    assert len(transactions) == 2
+    assert transactions[0]["type"] == "EXPENSE"
+    assert transactions[0]["amount"] == 154.40
+    assert transactions[1]["type"] == "INCOME"
+    assert transactions[1]["amount"] == 1845.57
+
+
 def test_document_understanding_uses_llm_for_arbitrary_docx(monkeypatch):
     data = base64.b64encode(
         _docx_bytes(
@@ -227,6 +297,27 @@ def test_document_understanding_parses_unstructured_financial_list():
     assert salary["recurrence_day"] == 5
 
 
+def test_document_understanding_does_not_parse_company_ids_as_money():
+    result = document_understanding.analyze_document_media(
+        {
+            "mimetype": "image/jpeg",
+            "filename": "comprovante.jpg",
+            "data": "ignored",
+        },
+        extracted_text=(
+            "R$ 185,77\n"
+            "SUPERMERCADOS SAO ROQUE LTDA AV. CONSUMIDOR - ITAQUAQUE\n"
+            "CNPJ 18.150.000/0001-77\n"
+            "Padaria R$ 12,30"
+        ),
+    )
+
+    assert result["document_type"] == "unstructured_financial_list"
+    amounts = sorted(tx["amount"] for tx in result["transactions"])
+    assert amounts == [12.3, 185.77]
+    assert all(tx["amount"] < 1000 for tx in result["transactions"])
+
+
 def test_document_tool_prepares_pending_import(monkeypatch):
     from app.agents.tools.documents import create_document_tools
 
@@ -270,6 +361,10 @@ def test_document_tool_prepares_pending_import(monkeypatch):
     )[0].invoke({})
 
     assert "Confirma?" in response
-    assert "Padaria: R$ 18.50 (despesa)" in saved["payload"]["summary"]
+    assert "Identifiquei uma despesa" in saved["payload"]["summary"]
+    assert "Valor total: R$ 18,50" in saved["payload"]["summary"]
+    assert "Método" not in saved["payload"]["summary"]
+    assert "Confiança" not in saved["payload"]["summary"]
+    assert "multimodal" not in saved["payload"]["summary"]
     assert saved["payload"]["action"] == "import_document_transactions"
     assert saved["payload"]["channel"] == "telegram"

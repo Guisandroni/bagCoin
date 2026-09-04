@@ -8,7 +8,7 @@ export interface ApiClientError extends Error {
 }
 
 function isAuthFlowRequest(url?: string) {
-  return !!url && /\/auth\/(login|register|google|verify-email|resend-verification|refresh)$/.test(url)
+  return !!url && /\/auth\/(login|register|google|verify-email|resend-verification|forgot-password|reset-password|refresh)$/.test(url)
 }
 
 function translateAxiosMessage(message?: string) {

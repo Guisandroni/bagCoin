@@ -40,7 +40,7 @@ async def link_to_message(db: AsyncSession, *, message_id: UUID, file_ids: Itera
 async def create(
     db: AsyncSession,
     *,
-    user_id: UUID,
+    user_id: int,
     filename: str,
     mime_type: str,
     size: int,
@@ -66,7 +66,7 @@ async def create(
 async def list_for_user(
     db: AsyncSession,
     *,
-    user_id: UUID,
+    user_id: int,
     skip: int = 0,
     limit: int = 20,
 ) -> list[ChatFile]:

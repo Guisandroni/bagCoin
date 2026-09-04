@@ -37,9 +37,9 @@ def cleanup_phone(isolated_phone):
     yield isolated_phone
     db = sync_session_maker()
     try:
-        from app.db.models.phone_user import PhoneUser
+        from app.db.models.user import User
 
-        user = db.query(PhoneUser).filter(PhoneUser.phone_number == isolated_phone).first()
+        user = db.query(User).filter(User.phone_number == isolated_phone).first()
         if user:
             db.query(Transaction).filter(Transaction.user_id == user.id).delete()
             db.query(Budget).filter(Budget.user_id == user.id).delete()

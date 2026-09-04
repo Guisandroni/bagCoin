@@ -1,7 +1,7 @@
 """Multimodal agent — processes audio, image, and document media.
 
 Audio:  Groq Whisper (whisper-large-v3-turbo)
-Image:  Groq Llama-4-Scout → Gemini 2.0 Flash (fallback chain)
+Image:  Gemini 2.5 Flash-Lite
 Docs:   PyPDF2, CSV/OFX text decode
 """
 
@@ -11,10 +11,9 @@ import json
 import logging
 import os
 import tempfile
-from typing import Any
+import time
 from collections.abc import Mapping
-
-import urllib.request
+from typing import Any, Literal
 
 from groq import Groq
 
@@ -38,16 +37,19 @@ MEDIA_FAILURE_PREFIXES = (
     "[Formato de mídia não reconhecido",
 )
 
-WHISPER_HALLUCINATIONS = frozenset({
-    "obrigado por assistir",
-    "obrigada por assistir",
-    "legendas pela comunidade",
-    "transcrição e legendas",
-    "inscreva-se no canal",
-})
+WHISPER_HALLUCINATIONS = frozenset(
+    {
+        "obrigado por assistir",
+        "obrigada por assistir",
+        "legendas pela comunidade",
+        "transcrição e legendas",
+        "inscreva-se no canal",
+    }
+)
 
 
 # ── Clients ────────────────────────────────────────────────
+
 
 def _configured_api_key(value: str | None) -> str | None:
     key = (value or "").strip()
@@ -68,6 +70,7 @@ def _get_groq_client() -> Groq | None:
 
 # ── Audio ──────────────────────────────────────────────────
 
+
 def process_audio(media: dict[str, Any]) -> MultimodalResult:
     """Transcreve audio usando Groq Whisper.
 
@@ -87,8 +90,11 @@ def process_audio(media: dict[str, Any]) -> MultimodalResult:
         mimetype = media.get("mimetype", "audio/ogg")
 
         ext_map = {
-            "audio/ogg": ".ogg", "audio/mpeg": ".mp3", "audio/mp4": ".m4a",
-            "audio/wav": ".wav", "audio/webm": ".webm",
+            "audio/ogg": ".ogg",
+            "audio/mpeg": ".mp3",
+            "audio/mp4": ".m4a",
+            "audio/wav": ".wav",
+            "audio/webm": ".webm",
         }
         ext = ext_map.get(mimetype, ".ogg")
 
@@ -135,7 +141,9 @@ def process_audio(media: dict[str, Any]) -> MultimodalResult:
         )
 
 
-def _audio_confidence(text: str, duration: float | None) -> tuple[str, str | None]:
+def _audio_confidence(
+    text: str, duration: float | None
+) -> tuple[Literal["normal", "low"], str | None]:
     """Classify transcription confidence using simple deterministic guards."""
     text_clean = (text or "").strip()
     if len(text_clean) < 3:
@@ -157,60 +165,139 @@ def _audio_confidence(text: str, duration: float | None) -> tuple[str, str | Non
 
 # ── Image ──────────────────────────────────────────────────
 
-def _image_groq(mimetype: str, b64_data: str) -> str | None:
-    """Analise de imagem via Groq Llama-4-Scout (multimodal)."""
-    client = _get_groq_client()
-    if not client:
-        return None
-    try:
-        data_uri = f"data:{mimetype};base64,{b64_data}"
-        response = client.chat.completions.create(
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": _image_prompt()},
-                    {"type": "image_url", "image_url": {"url": data_uri}},
-                ],
-            }],
-            max_tokens=1024,
-            temperature=0.2,
-        )
-        text = response.choices[0].message.content.strip()
-        logger.info(f"Imagem analisada (Groq Llama-4): {text[:80]}...")
-        return text
-    except Exception as e:
-        logger.warning(f"Groq Llama-4 Vision falhou: {e}")
-        return None
-
 
 def _image_gemini(mimetype: str, b64_data: str) -> str | None:
-    """Analise de imagem via Gemini 2.0 Flash (fallback)."""
+    """Analise de imagem via Gemini 2.5 Flash-Lite (Google Gen AI SDK)."""
+    if not settings.GEMINI_API_KEY:
+        logger.error("[image_gemini] GEMINI_API_KEY não configurada")
+        return None
+    try:
+        from google import genai
+        from google.genai import types
+    except ImportError:
+        logger.error("[image_gemini] google-genai não instalado. Execute: pip install google-genai")
+        return None
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    image_bytes = base64.b64decode(b64_data)
+
+    config_kwargs: dict[str, Any] = {
+        "temperature": 0,
+        "max_output_tokens": 1024,
+    }
+    if settings.IMAGE_STRUCTURED_EXTRACT:
+        config_kwargs["response_mime_type"] = "application/json"
+
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash-lite",
+                contents=[
+                    _image_prompt(),
+                    types.Part.from_bytes(data=image_bytes, mime_type=mimetype),
+                ],
+                config=types.GenerateContentConfig(**config_kwargs),
+            )
+            text = response.text.strip() if response.text else None
+            if text:
+                logger.info(f"Imagem analisada (Gemini): {text[:80]}...")
+                return text
+            logger.warning("[image_gemini] Gemini retornou resposta vazia")
+        except Exception as e:
+            if _is_retryable_gemini_error(e) and attempt < 2:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            logger.error(f"[image_gemini] Gemini Vision falhou: {e}")
+            return None
+    return None
+
+
+def _is_retryable_gemini_error(error: Exception) -> bool:
+    text = str(error).lower()
+    return any(marker in text for marker in ("503", "unavailable", "429", "resource_exhausted"))
+
+
+def _image_receipt_labeled_total_gemini(mimetype: str, b64_data: str) -> dict[str, Any] | None:
+    """Focused receipt footer pass to avoid confusing cash paid with receipt total."""
     if not settings.GEMINI_API_KEY:
         return None
     try:
-        url = (
-            "https://generativelanguage.googleapis.com/v1beta/models/"
-            f"gemini-2.0-flash:generateContent?key={settings.GEMINI_API_KEY}"
-        )
-        body = json.dumps({
-            "contents": [{
-                "parts": [
-                    {"text": _image_prompt()},
-                    {"inline_data": {"mime_type": mimetype, "data": b64_data}},
-                ]
-            }]
-        }).encode()
-        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
-        resp = urllib.request.urlopen(req, timeout=20)
-        data = json.loads(resp.read())
-        if "candidates" in data:
-            text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            logger.info(f"Imagem analisada (Gemini): {text[:80]}...")
-            return text
-    except Exception as e:
-        logger.warning(f"Gemini Vision falhou: {e}")
+        from google import genai
+        from google.genai import types
+    except ImportError:
+        return None
+    prompt = (
+        "Leia somente as linhas finais da nota fiscal/cupom na imagem. "
+        "Retorne APENAS JSON válido neste formato: "
+        '{"valor_total": number|null, "dinheiro": number|null, "troco": number|null, "evidencia": "texto curto"}. '
+        "valor_total deve ser exclusivamente o número ao lado de rótulos como 'Valor Total R$', "
+        "'Total R$' ou 'Total a pagar'. "
+        "Não use 'Dinheiro', 'Valor recebido', 'Pagamento', 'Pago' ou 'Troco' como valor_total."
+    )
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    image_bytes = base64.b64decode(b64_data)
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash-lite",
+                contents=[
+                    prompt,
+                    types.Part.from_bytes(data=image_bytes, mime_type=mimetype),
+                ],
+                config=types.GenerateContentConfig(
+                    temperature=0,
+                    max_output_tokens=256,
+                    response_mime_type="application/json",
+                ),
+            )
+            parsed = _parse_json_object(response.text or "")
+            return parsed if isinstance(parsed, dict) else None
+        except Exception as exc:
+            if _is_retryable_gemini_error(exc) and attempt < 2:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            logger.warning("[image_receipt_total] focused total extraction failed: %s", exc)
+            return None
     return None
+
+
+def _parse_number(value: Any) -> float | None:
+    if isinstance(value, int | float):
+        return float(value)
+    text = str(value or "").strip()
+    if not text:
+        return None
+    text = text.replace("R$", "").replace(" ", "")
+    if "," in text and "." in text:
+        text = text.replace(".", "").replace(",", ".")
+    else:
+        text = text.replace(",", ".")
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _apply_focused_receipt_total(
+    structured: dict[str, Any],
+    mimetype: str,
+    b64_data: str,
+) -> dict[str, Any]:
+    if not structured.get("is_receipt"):
+        return structured
+    focused = _image_receipt_labeled_total_gemini(mimetype, b64_data)
+    if not focused:
+        return structured
+    labeled_total = _parse_number(focused.get("valor_total"))
+    if labeled_total is None or labeled_total <= 0:
+        return structured
+    return {
+        **structured,
+        "total_amount": round(labeled_total, 2),
+        "labeled_total_amount": round(labeled_total, 2),
+        "payment_amount": _parse_number(focused.get("dinheiro")),
+        "change_amount": _parse_number(focused.get("troco")),
+        "total_evidence": focused.get("evidencia"),
+    }
 
 
 def _image_prompt() -> str:
@@ -247,11 +334,20 @@ def _parse_json_object(text: str) -> dict[str, Any] | None:
 
 def _image_result_from_text(text: str, provider: str) -> MultimodalResult:
     structured = _parse_json_object(text) if settings.IMAGE_STRUCTURED_EXTRACT else None
+    if structured is None and settings.IMAGE_STRUCTURED_EXTRACT:
+        try:
+            from app.agents.document_understanding import _parse_receipt_payload_from_text
+
+            structured = _parse_receipt_payload_from_text(text)
+        except Exception:
+            structured = None
     if structured:
         raw_text = str(structured.get("raw_text") or "").strip()
         establishment = str(structured.get("establishment") or "").strip()
         total = structured.get("total_amount")
-        text_parts = [part for part in [establishment, f"R$ {total}" if total else "", raw_text] if part]
+        text_parts = [
+            part for part in [establishment, f"R$ {total}" if total else "", raw_text] if part
+        ]
         result_text = "\n".join(text_parts) or raw_text or text
         logger.info(
             "[image_receipt] structured=True establishment=%s raw_text_len=%s",
@@ -279,10 +375,10 @@ def _low_confidence_message(source_format: str, reason: str | None) -> str:
 
 
 def process_image(media: dict[str, Any]) -> MultimodalResult:
-    """Extrai texto de imagem — Llama-4-Scout → Gemini.
+    """Extrai texto de imagem com Gemini.
 
     Útil para notas fiscais, comprovantes, prints de banco.
-    Resizes large images to avoid Groq/Gemini payload limits.
+    Resizes large images to avoid model payload limits.
     """
     mimetype = media.get("mimetype", "image/jpeg")
     try:
@@ -295,20 +391,26 @@ def process_image(media: dict[str, Any]) -> MultimodalResult:
     resized, new_mimetype = _maybe_resize_image(raw_bytes, mimetype)
     b64_data = base64.b64encode(resized).decode("ascii")
 
-    # 1. Groq Llama-4-Scout (multimodal nativo)
-    result = _image_groq(new_mimetype, b64_data)
-    if result:
-        return _image_result_from_text(result, "groq_llama4")
-
-    # 2. Gemini 2.0 Flash (fallback)
     result = _image_gemini(new_mimetype, b64_data)
     if result:
-        return _image_result_from_text(result, "gemini")
+        image_result = _image_result_from_text(result, "gemini")
+        if image_result.structured:
+            image_result.structured = _apply_focused_receipt_total(
+                image_result.structured,
+                new_mimetype,
+                b64_data,
+            )
+            image_result = _image_result_from_text(
+                json.dumps(image_result.structured, ensure_ascii=False),
+                "gemini",
+            )
+        return image_result
 
     return MultimodalResult(text="", provider="image", failure=True, reason="vision_unavailable")
 
 
 # ── Document ───────────────────────────────────────────────
+
 
 def _is_docx_media(mimetype: str, filename: str) -> bool:
     return (
@@ -337,14 +439,18 @@ def process_document(media: dict[str, Any]) -> MultimodalResult:
             return MultimodalResult(text=text, provider="document_text")
         except Exception as e:
             logger.error(f"Erro ao decodificar texto: {e}")
-            return MultimodalResult(text="", provider="document_text", failure=True, reason="text_decode_error")
+            return MultimodalResult(
+                text="", provider="document_text", failure=True, reason="text_decode_error"
+            )
 
     # PDF
     if mimetype == "application/pdf":
         try:
             import PyPDF2
         except ImportError:
-            return MultimodalResult(text="", provider="pdf", failure=True, reason="pdf_library_missing")
+            return MultimodalResult(
+                text="", provider="pdf", failure=True, reason="pdf_library_missing"
+            )
 
         try:
             pdf_file = io.BytesIO(doc_data)
@@ -375,10 +481,13 @@ def process_document(media: dict[str, Any]) -> MultimodalResult:
         logger.info(f"DOCX extraído: {len(text)} chars")
         return MultimodalResult(text=text, provider="docx")
 
-    return MultimodalResult(text="", provider="document", failure=True, reason="unsupported_document")
+    return MultimodalResult(
+        text="", provider="document", failure=True, reason="unsupported_document"
+    )
 
 
 # ── Entry Point ────────────────────────────────────────────
+
 
 def process_multimodal(state: dict[str, Any]) -> dict[str, Any]:
     """Processa mídia (áudio, imagem, documento) e extrai texto."""
@@ -402,12 +511,7 @@ def process_multimodal(state: dict[str, Any]) -> dict[str, Any]:
         result = MultimodalResult(text="", failure=True, reason="unknown_format")
     result = _coerce_result(result, source_format)
 
-    if (
-        result.is_failure
-        and source_format == "document"
-        and result.reason == "pdf_empty"
-        and settings.USE_TOOL_AGENTS
-    ):
+    if result.is_failure and source_format == "document" and result.reason == "pdf_empty":
         state["context"] = state.get("context", {})
         state["context"]["extracted_media_text"] = ""
         state["context"]["original_format"] = source_format
@@ -423,14 +527,6 @@ def process_multimodal(state: dict[str, Any]) -> dict[str, Any]:
         state["error"] = f"media_low_confidence:{result.reason or 'unknown'}"
         state["response"] = _low_confidence_message(source_format, result.reason)
         return state
-
-    if source_format == "image" and result.structured is not None:
-        if not result.structured.get("is_receipt", True) and not settings.USE_TOOL_AGENTS:
-            state["response"] = (
-                "Essa imagem não parece um comprovante. "
-                "Pode mandar uma nota fiscal ou descrever em texto?"
-            )
-            return state
 
     state["message"] = result.text
     state["context"] = state.get("context", {})
@@ -452,7 +548,9 @@ def _coerce_result(result: MultimodalResult | str, source_format: str) -> Multim
         return result
     text = str(result)
     if text.startswith(MEDIA_FAILURE_PREFIXES):
-        return MultimodalResult(text="", provider=source_format, failure=True, reason=text.strip("[]"))
+        return MultimodalResult(
+            text="", provider=source_format, failure=True, reason=text.strip("[]")
+        )
     return MultimodalResult(text=text, provider=source_format)
 
 
@@ -484,10 +582,22 @@ def _source_format_from_media(source_format: str, media: dict[str, Any]) -> str:
     if filename:
         ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
         ext_map = {
-            "ogg": "audio", "mp3": "audio", "m4a": "audio", "wav": "audio", "webm": "audio",
-            "jpg": "image", "jpeg": "image", "png": "image", "webp": "image", "gif": "image",
-            "pdf": "document", "csv": "document", "txt": "document", "ofx": "document",
-            "docx": "document", "doc": "document",
+            "ogg": "audio",
+            "mp3": "audio",
+            "m4a": "audio",
+            "wav": "audio",
+            "webm": "audio",
+            "jpg": "image",
+            "jpeg": "image",
+            "png": "image",
+            "webp": "image",
+            "gif": "image",
+            "pdf": "document",
+            "csv": "document",
+            "txt": "document",
+            "ofx": "document",
+            "docx": "document",
+            "doc": "document",
         }
         if ext in ext_map:
             return ext_map[ext]
@@ -521,9 +631,7 @@ def _maybe_resize_image(data: bytes, mimetype: str) -> tuple[bytes, str]:
         buf = BytesIO()
         img.save(buf, format="JPEG", quality=85, optimize=True)
         new_data = buf.getvalue()
-        logger.info(
-            f"Image resized: {len(data)} → {len(new_data)} bytes ({mimetype} → image/jpeg)"
-        )
+        logger.info(f"Image resized: {len(data)} → {len(new_data)} bytes ({mimetype} → image/jpeg)")
         return new_data, "image/jpeg"
     except Exception as exc:
         logger.warning(f"Image resize failed, using original: {exc}")

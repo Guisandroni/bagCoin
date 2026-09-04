@@ -9,7 +9,11 @@ EXTRACT_PROMPTS: dict[str, str] = {
 Retorne APENAS JSON: {"name": "categoria", "total_limit": 3000.0, "period": "monthly"}
 - name: a categoria/nome do orçamento (ex: alimentação, transporte)
 - total_limit: valor numérico (número, sem R$)
-- period: "monthly", "weekly", "daily" ou "yearly" (padrão: "monthly")
+- period: sempre "monthly". O BagCoin cria orçamentos por categoria a cada 30 dias.
+- não extraia nem peça descrição para orçamento.
+Exemplos:
+"orçamento 4000 alimentação" -> {"name": "alimentação", "total_limit": 4000.0, "period": "monthly"}
+"alimentação 4000" -> {"name": "alimentação", "total_limit": 4000.0, "period": "monthly"}
 Se um campo não estiver na mensagem, omita do JSON.""",
 
     "goal": """Extraia dados de meta financeira da mensagem.

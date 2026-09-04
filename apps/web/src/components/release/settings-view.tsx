@@ -2,11 +2,11 @@
 
 import Image from "next/image"
 import {
-  BarChart3,
   FolderTree,
   Home,
+  LifeBuoy,
   MessageSquare,
-  Send,
+  // Send,
   Target,
   User,
   Wallet,
@@ -43,14 +43,14 @@ export function SettingsView({
       title: "Conta",
       items: [
         { id: "perfil", label: "Perfil", icon: User },
-        { id: "relatorios", label: "Relatórios", icon: BarChart3 },
+        { id: "suporte", label: "Suporte", icon: LifeBuoy },
       ],
     },
     {
       title: "Chatbot",
       items: [
         { id: "whatsapp", label: openingChannel === "whatsapp" ? "Abrindo WhatsApp..." : "WhatsApp", icon: MessageSquare },
-        { id: "telegram", label: openingChannel === "telegram" ? "Abrindo Telegram..." : "Telegram", icon: Send },
+        // { id: "telegram", label: openingChannel === "telegram" ? "Abrindo Telegram..." : "Telegram", icon: Send },
       ],
     },
   ]

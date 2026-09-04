@@ -144,3 +144,4 @@ scripts/
 .opencode
 bugs.md
 .agents/skills/
+.pi-subagents/

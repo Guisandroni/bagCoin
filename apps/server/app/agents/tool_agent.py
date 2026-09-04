@@ -57,6 +57,8 @@ def run_tool_agent(
             except Exception as exc:
                 logger.exception("[tool_agent] tool %s failed", tool_name)
                 result = f"Erro ao executar {tool_name}: {exc}"
+            if tool_name.startswith(("prepare_", "list_")):
+                return str(result)
             messages.append(
                 ToolMessage(
                     content=str(result),

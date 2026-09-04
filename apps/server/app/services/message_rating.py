@@ -68,7 +68,7 @@ class MessageRatingService:
                 details={"message_id": str(message_id), "conversation_id": str(conversation_id)},
             )
 
-    async def _validate_conversation_ownership(self, conversation_id: UUID, user_id: UUID) -> None:
+    async def _validate_conversation_ownership(self, conversation_id: UUID, user_id: int) -> None:
         """Validate that the conversation belongs to the specified user.
 
         Raises:
@@ -85,7 +85,7 @@ class MessageRatingService:
         self,
         conversation_id: UUID,
         message_id: UUID,
-        user_id: UUID,
+        user_id: int,
         data: MessageRatingCreate,
     ) -> tuple[MessageRatingRead, bool]:
         """Rate or update rating for a message.
@@ -152,7 +152,7 @@ class MessageRatingService:
         self,
         conversation_id: UUID,
         message_id: UUID,
-        user_id: UUID,
+        user_id: int,
     ) -> None:
         """Remove a user's rating from a message.
 

@@ -20,6 +20,30 @@ http:
       tls:
         certResolver: letsencrypt
 
+    bagcoin-api-docs:
+      rule: "Host(`api.bagcoin.app`) && (PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/api/v1/openapi.json`))"
+      entryPoints:
+        - websecure
+      service: bagcoin-api
+      priority: 100
+      middlewares:
+        - dashboard-auth
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
+    bagcoin-api-admin:
+      rule: "Host(`api.bagcoin.app`) && PathPrefix(`/admin`)"
+      entryPoints:
+        - websecure
+      service: bagcoin-api
+      priority: 100
+      middlewares:
+        - dashboard-auth
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
     bagcoin-flower:
       rule: "Host(`flower.bagcoin.app`)"
       entryPoints:

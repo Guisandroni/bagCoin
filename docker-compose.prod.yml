@@ -79,6 +79,9 @@ services:
     environment:
       - DEBUG=false
       - ENVIRONMENT=production
+      - ENABLE_API_DOCS=${ENABLE_API_DOCS:-false}
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-https://bagcoin.app}
+      - SUPPORT_EMAIL=${SUPPORT_EMAIL:-contato@bagcoin.app}
       - POSTGRES_HOST=db
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}

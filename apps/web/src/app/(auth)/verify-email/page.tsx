@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Mail, RefreshCw, ShieldCheck } from "lucide-react";
+import { Mail, RefreshCw } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AuthCard,
@@ -60,54 +60,56 @@ export default function VerifyEmailPage() {
   const [hasManualEmailMode, setHasManualEmailMode] = useState(false);
 
   useEffect(() => {
-    if (queryEmail) {
-      setEmail(queryEmail);
-      setSource(querySource);
-      if (querySource === "register" && querySent === "1") {
-        setSuccessMessage(
-          "Enviamos um código de verificação para o seu email.",
-        );
+    queueMicrotask(() => {
+      if (queryEmail) {
+        setEmail(queryEmail);
+        setSource(querySource);
+        if (querySource === "register" && querySent === "1") {
+          setSuccessMessage(
+            "Enviamos um código de verificação para o seu email.",
+          );
+        }
+        return;
       }
-      return;
-    }
-    try {
-      const raw = window.sessionStorage.getItem("pending_email_verification");
-      if (!raw) {
+      try {
+        const raw = window.sessionStorage.getItem("pending_email_verification");
+        if (!raw) {
+          setHasManualEmailMode(true);
+          setErrorMessage(
+            "Não encontramos sua sessão de verificação. Digite seu email para enviar um novo código.",
+          );
+          return;
+        }
+        const parsed = JSON.parse(raw) as {
+          email?: string;
+          source?: string;
+          resend_available_in_seconds?: number;
+          issued_at?: number;
+        };
+        if (!parsed.email) {
+          setHasManualEmailMode(true);
+          setErrorMessage(
+            "Não encontramos sua sessão de verificação. Digite seu email para enviar um novo código.",
+          );
+          return;
+        }
+        setEmail(parsed.email);
+        setSource(parsed.source ?? null);
+        const issuedAt =
+          typeof parsed.issued_at === "number" ? parsed.issued_at : Date.now();
+        const availableIn =
+          typeof parsed.resend_available_in_seconds === "number"
+            ? parsed.resend_available_in_seconds
+            : 0;
+        const elapsedSeconds = Math.floor((Date.now() - issuedAt) / 1000);
+        setCooldown(Math.max(availableIn - elapsedSeconds, 0));
+      } catch {
         setHasManualEmailMode(true);
         setErrorMessage(
           "Não encontramos sua sessão de verificação. Digite seu email para enviar um novo código.",
         );
-        return;
       }
-      const parsed = JSON.parse(raw) as {
-        email?: string;
-        source?: string;
-        resend_available_in_seconds?: number;
-        issued_at?: number;
-      };
-      if (!parsed.email) {
-        setHasManualEmailMode(true);
-        setErrorMessage(
-          "Não encontramos sua sessão de verificação. Digite seu email para enviar um novo código.",
-        );
-        return;
-      }
-      setEmail(parsed.email);
-      setSource(parsed.source ?? null);
-      const issuedAt =
-        typeof parsed.issued_at === "number" ? parsed.issued_at : Date.now();
-      const availableIn =
-        typeof parsed.resend_available_in_seconds === "number"
-          ? parsed.resend_available_in_seconds
-          : 0;
-      const elapsedSeconds = Math.floor((Date.now() - issuedAt) / 1000);
-      setCooldown(Math.max(availableIn - elapsedSeconds, 0));
-    } catch {
-      setHasManualEmailMode(true);
-      setErrorMessage(
-        "Não encontramos sua sessão de verificação. Digite seu email para enviar um novo código.",
-      );
-    }
+    });
   }, [queryEmail, querySource, querySent, router]);
 
   useEffect(() => {

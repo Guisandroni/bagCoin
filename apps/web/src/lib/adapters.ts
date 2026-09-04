@@ -78,6 +78,7 @@ export function serverBudgetToRelease(
     total,
     remaining,
     percentage,
+    budgetDate: budget.budget_date || budget.created_at?.slice(0, 10),
   }
 }
 
@@ -103,18 +104,14 @@ export function summaryToDashboardSummary(
   goals: ServerGoal[] | null
 ): ReleaseDashboardSummary {
   const recent = (summary?.recent_transactions ?? []).slice(0, 4).map(serverTransactionToRelease)
-  const chartColors = [
-    "text-[var(--rls-primary-container)]",
-    "text-[var(--rls-secondary-container)]",
-    "text-[var(--rls-tertiary-container)]",
-    "text-[var(--rls-outline)]",
-  ]
-  const categories = (summary?.categories ?? []).map((cat, index) => ({
+  const categories = (summary?.categories ?? []).map((cat) => ({
     name: cat.name,
     percentage: summary?.total_expenses
       ? Math.round((cat.amount / summary.total_expenses) * 100)
       : 0,
-    color: chartColors[index % chartColors.length],
+    amount: Math.abs(Number(cat.amount) || 0),
+    color: cat.color || getCategoryColor(cat.name),
+    emoji: getCategoryEmoji(cat.name),
   }))
 
   const goalProgress = (goals ?? []).map((g) => ({
@@ -133,7 +130,7 @@ export function summaryToDashboardSummary(
   }))
 
   return {
-    totalBalance: summary?.balance ?? 0,
+    totalBalance: Math.max(summary?.balance ?? 0, 0),
     income: summary?.total_income ?? 0,
     expenses: summary?.total_expenses ?? 0,
     recentTransactions: recent,

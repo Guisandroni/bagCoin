@@ -29,6 +29,7 @@ export interface ReleaseBudget {
   total: number
   remaining: number
   percentage: number
+  budgetDate?: string
 }
 
 export interface ReleaseTransaction {
@@ -118,7 +119,7 @@ export interface ReleaseDashboardSummary {
   income: number
   expenses: number
   recentTransactions: ReleaseTransaction[]
-  categoryBreakdown: { name: string; percentage: number; color: string }[]
+  categoryBreakdown: { name: string; percentage: number; amount: number; color: string; emoji: string }[]
   goals: { name: string; current: number; target: number; percentage: number }[]
   budgets: { name: string; spent: number; total: number; remaining: number; percentage: number }[]
 }

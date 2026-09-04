@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
-from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -16,7 +15,7 @@ class MockUser:
     """Mock authenticated user."""
 
     def __init__(self):
-        self.id = uuid4()
+        self.id = 1
         self.email = "test@example.com"
         self.full_name = "Test User"
         self.is_active = True
@@ -59,11 +58,11 @@ async def client_with_auth(mock_user, mock_redis, mock_db_session):
 def _mock_credit_card_dict(**kwargs) -> dict:
     """Return a mock credit card response dict."""
     now = kwargs.get("created_at", datetime.now(UTC))
-    card_id = kwargs.get("id", uuid4())
-    user_id = kwargs.get("user_id", uuid4())
+    card_id = kwargs.get("id", 1)
+    user_id = kwargs.get("user_id", 1)
     return {
-        "id": str(card_id) if isinstance(card_id, UUID) else card_id,
-        "user_id": str(user_id) if isinstance(user_id, UUID) else user_id,
+        "id": str(card_id) if False else card_id,
+        "user_id": str(user_id) if False else user_id,
         "name": kwargs.get("name", "Nubank"),
         "issuer": kwargs.get("issuer", "visa"),
         "limit": kwargs.get("limit", 5000.0),
@@ -103,7 +102,7 @@ async def test_create_credit_card_requires_auth(client):
 @pytest.mark.anyio
 async def test_get_credit_card_requires_auth(client):
     """Test that getting a credit card requires auth."""
-    response = await client.get(f"{settings.API_V1_STR}/bagcoin/credit-cards/{uuid4()}")
+    response = await client.get(f"{settings.API_V1_STR}/bagcoin/credit-cards/{1}")
     assert response.status_code == 401
 
 
@@ -111,7 +110,7 @@ async def test_get_credit_card_requires_auth(client):
 async def test_update_credit_card_requires_auth(client):
     """Test that updating a credit card requires auth."""
     response = await client.patch(
-        f"{settings.API_V1_STR}/bagcoin/credit-cards/{uuid4()}",
+        f"{settings.API_V1_STR}/bagcoin/credit-cards/{1}",
         json={"name": "Updated"},
     )
     assert response.status_code == 401
@@ -120,7 +119,7 @@ async def test_update_credit_card_requires_auth(client):
 @pytest.mark.anyio
 async def test_delete_credit_card_requires_auth(client):
     """Test that deleting a credit card requires auth."""
-    response = await client.delete(f"{settings.API_V1_STR}/bagcoin/credit-cards/{uuid4()}")
+    response = await client.delete(f"{settings.API_V1_STR}/bagcoin/credit-cards/{1}")
     assert response.status_code == 401
 
 
@@ -151,10 +150,10 @@ async def test_list_credit_cards_with_data(client_with_auth, mock_user):
     """Test listing credit cards with data."""
     cards_data = [
         _mock_credit_card_dict(
-            id=uuid4(), name="Nubank", issuer="visa", limit=5000.0, user_id=mock_user.id
+            id=1, name="Nubank", issuer="visa", limit=5000.0, user_id=mock_user.id
         ),
         _mock_credit_card_dict(
-            id=uuid4(), name="Inter", issuer="mastercard", limit=3000.0, user_id=mock_user.id, color="#FF6600"
+            id=1, name="Inter", issuer="mastercard", limit=3000.0, user_id=mock_user.id, color="#FF6600"
         ),
     ]
 
@@ -185,7 +184,7 @@ async def test_list_credit_cards_with_data(client_with_auth, mock_user):
 @pytest.mark.anyio
 async def test_create_credit_card(client_with_auth, mock_user):
     """Test creating a credit card returns 201."""
-    fake_id = uuid4()
+    fake_id = 1
     now = datetime.now(UTC)
 
     with patch(
@@ -241,7 +240,7 @@ async def test_create_credit_card_invalid_data(client_with_auth):
 @pytest.mark.anyio
 async def test_get_credit_card(client_with_auth, mock_user):
     """Test getting a specific credit card."""
-    card_id = uuid4()
+    card_id = 1
     card_data = _mock_credit_card_dict(
         id=card_id,
         name="Nubank",
@@ -280,11 +279,11 @@ async def test_get_credit_card_not_found(client_with_auth):
         new_callable=AsyncMock,
     ) as mock_get:
         mock_get.side_effect = NotFoundError(
-            message="Credit card not found", details={"id": str(uuid4())}
+            message="Credit card not found", details={"id": str(1)}
         )
 
         response = await client_with_auth.get(
-            f"{settings.API_V1_STR}/bagcoin/credit-cards/{uuid4()}"
+            f"{settings.API_V1_STR}/bagcoin/credit-cards/{1}"
         )
 
     assert response.status_code == 404
@@ -299,7 +298,7 @@ async def test_get_credit_card_not_found(client_with_auth):
 @pytest.mark.anyio
 async def test_update_credit_card(client_with_auth, mock_user):
     """Test updating a credit card."""
-    card_id = uuid4()
+    card_id = 1
     updated_data = _mock_credit_card_dict(
         id=card_id,
         name="Updated Card",
@@ -350,7 +349,7 @@ async def test_delete_credit_card(client_with_auth):
         mock_delete.return_value = None
 
         response = await client_with_auth.delete(
-            f"{settings.API_V1_STR}/bagcoin/credit-cards/{uuid4()}"
+            f"{settings.API_V1_STR}/bagcoin/credit-cards/{1}"
         )
 
     assert response.status_code == 204
@@ -366,11 +365,11 @@ async def test_delete_credit_card_not_found(client_with_auth):
         new_callable=AsyncMock,
     ) as mock_delete:
         mock_delete.side_effect = NotFoundError(
-            message="Credit card not found", details={"id": str(uuid4())}
+            message="Credit card not found", details={"id": str(1)}
         )
 
         response = await client_with_auth.delete(
-            f"{settings.API_V1_STR}/bagcoin/credit-cards/{uuid4()}"
+            f"{settings.API_V1_STR}/bagcoin/credit-cards/{1}"
         )
 
     assert response.status_code == 404

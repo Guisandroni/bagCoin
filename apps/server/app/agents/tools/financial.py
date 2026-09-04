@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from langchain_core.tools import BaseTool, tool
 
+from app.agents import responses as resp
 from app.agents.pending_actions import save_pending_action
 from app.agents.persistence import get_user_transactions
 
@@ -64,7 +65,6 @@ def create_financial_tools(phone_number: str, context: dict | None = None) -> li
         if amount <= 0:
             return "Qual foi o valor da transacao?"
         tx_type = "INCOME" if str(transaction_type).upper() == "INCOME" else "EXPENSE"
-        label = "receita" if tx_type == "INCOME" else "gasto"
         clean_description = (description or "").strip() or "Sem descricao"
         clean_category = (category or "Outros").strip() or "Outros"
         clean_frequency = str(recurrence_frequency or "monthly").lower()
@@ -85,11 +85,12 @@ def create_financial_tools(phone_number: str, context: dict | None = None) -> li
             "recurrence_frequency": clean_frequency if is_recurring else None,
             "recurrence_day": recurrence_day if is_recurring else None,
         }
-        date_part = f", data {transaction_date}" if transaction_date else ""
-        recurrence_part = f" recorrente ({clean_frequency})" if is_recurring else ""
-        summary = (
-            f"Vou registrar {label}{recurrence_part} de {_money(float(amount))} em {clean_category}"
-            f" ({clean_description}){date_part}."
+        summary = resp.transaction_confirmation(
+            tx_type,
+            float(amount),
+            clean_category,
+            clean_description,
+            transaction_date,
         )
         return save_pending_action(
             phone_number,

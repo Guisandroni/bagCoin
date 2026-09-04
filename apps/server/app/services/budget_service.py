@@ -10,13 +10,18 @@ from typing import Any
 
 from sqlalchemy import func
 
-from app.core.financial_categories import default_category_names, resolve_default_category_name
+from app.core.financial_categories import (
+    default_category_names,
+    normalize_category_key,
+    resolve_default_category_name,
+)
 from app.db.models.budget import Budget
 from app.db.models.category import Category
 from app.db.models.enums import GoalStatus
 from app.db.models.goal import Goal
 from app.db.models.transaction import Transaction
 from app.db.session import sync_session_maker
+from app.services.agent_memory_service import add_memory_event
 
 logger = logging.getLogger(__name__)
 
@@ -105,14 +110,25 @@ def create_budget(
 
         budget = Budget(
             user_id=user.id,
-            user_uuid=user.merged_into_user_id,
             category_id=category_id,
             name=name,
             period=period,
             total_limit=total_limit,
+            budget_date=date.today(),
             budget_type=budget_type,
         )
         db.add(budget)
+        db.flush()
+        add_memory_event(
+            db,
+            user_id=user.id,
+            event_type="budget_created",
+            entity_type="budget",
+            entity_id=budget.id,
+            source="agent",
+            summary=f"Orçamento criado: {budget.name} limite R$ {float(budget.total_limit):.2f}",
+            payload={"budget_id": budget.id, "name": budget.name, "total_limit": float(budget.total_limit)},
+        )
         db.commit()
         db.refresh(budget)
 
@@ -124,6 +140,7 @@ def create_budget(
             "total_limit": budget.total_limit,
             "period": budget.period,
             "budget_type": budget.budget_type,
+            "budget_date": budget.budget_date.isoformat() if budget.budget_date else None,
         }
     except Exception as e:
         db.rollback()
@@ -157,6 +174,7 @@ def get_budgets(phone_number: str) -> list[dict[str, Any]]:
                     if budget.total_limit > 0
                     else 0,
                     "period": budget.period,
+                    "budget_date": budget.budget_date.isoformat() if budget.budget_date else None,
                 }
             )
         return result
@@ -210,28 +228,19 @@ def delete_budget_by_name(phone_number: str, name: str) -> int:
     db = sync_session_maker()
     try:
         user = _get_or_create_user(phone_number, db)
-        budgets = (
-            db.query(Budget)
-            .filter(
-                Budget.user_id == user.id,
-                Budget.name.ilike(f"%{name}%"),
-            )
-            .all()
-        )
-        if not budgets:
-            budgets = (
-                db.query(Budget)
-                .filter(
-                    Budget.user_id == user.id,
-                )
-                .join(Category, Budget.category_id == Category.id)
-                .filter(
-                    Category.name.ilike(f"%{name}%"),
-                )
-                .all()
-            )
+        budgets = _find_budgets_by_name(db, user.id, name)
         count = 0
         for budget in budgets:
+            add_memory_event(
+                db,
+                user_id=user.id,
+                event_type="budget_deleted",
+                entity_type="budget",
+                entity_id=budget.id,
+                source="agent",
+                summary=f"Orçamento removido: {budget.name}",
+                payload={"budget_id": budget.id, "name": budget.name},
+            )
             db.delete(budget)
             count += 1
         db.commit()
@@ -257,31 +266,22 @@ def update_budget_limit(phone_number: str, name: str, new_limit: float) -> dict[
     db = sync_session_maker()
     try:
         user = _get_or_create_user(phone_number, db)
-        budget = (
-            db.query(Budget)
-            .filter(
-                Budget.user_id == user.id,
-                Budget.name.ilike(f"%{name}%"),
-            )
-            .first()
-        )
-        if not budget:
-            budget = (
-                db.query(Budget)
-                .filter(
-                    Budget.user_id == user.id,
-                )
-                .join(Category, Budget.category_id == Category.id)
-                .filter(
-                    Category.name.ilike(f"%{name}%"),
-                )
-                .first()
-            )
+        budget = next(iter(_find_budgets_by_name(db, user.id, name)), None)
         if not budget:
             return None
         budget.total_limit = new_limit
         for item in budget.items:
             item.limit_amount = new_limit
+        add_memory_event(
+            db,
+            user_id=user.id,
+            event_type="budget_updated",
+            entity_type="budget",
+            entity_id=budget.id,
+            source="agent",
+            summary=f"Orçamento atualizado: {budget.name} limite R$ {float(new_limit):.2f}",
+            payload={"budget_id": budget.id, "new_limit": float(new_limit)},
+        )
         db.commit()
         db.refresh(budget)
         cat_name = budget.category.name if budget.category else budget.name
@@ -291,6 +291,7 @@ def update_budget_limit(phone_number: str, name: str, new_limit: float) -> dict[
             "category_name": cat_name,
             "total_limit": budget.total_limit,
             "period": budget.period,
+            "budget_date": budget.budget_date.isoformat() if budget.budget_date else None,
         }
     except Exception as e:
         db.rollback()
@@ -298,6 +299,31 @@ def update_budget_limit(phone_number: str, name: str, new_limit: float) -> dict[
         raise
     finally:
         db.close()
+
+
+def _find_budgets_by_name(db, user_id: int, name: str) -> list[Budget]:
+    """Find budgets by budget/category name, ignoring accents and case."""
+    name_norm = normalize_category_key(resolve_default_category_name(name))
+    raw_norm = normalize_category_key(name)
+    if not name_norm and not raw_norm:
+        return []
+    budgets = db.query(Budget).filter(Budget.user_id == user_id).all()
+    matches: list[Budget] = []
+    for budget in budgets:
+        budget_norm = normalize_category_key(budget.name or "")
+        category_norm = normalize_category_key(budget.category.name if budget.category else "")
+        if (
+            raw_norm in budget_norm
+            or budget_norm in raw_norm
+            or raw_norm in category_norm
+            or category_norm in raw_norm
+            or name_norm in budget_norm
+            or budget_norm in name_norm
+            or name_norm in category_norm
+            or category_norm in name_norm
+        ):
+            matches.append(budget)
+    return matches
 
 
 # =====================================================================
@@ -318,7 +344,6 @@ def create_goal(
 
         goal = Goal(
             user_id=user.id,
-            user_uuid=user.merged_into_user_id,
             title=title,
             target_amount=target_amount,
             current_amount=0.0,
@@ -326,6 +351,17 @@ def create_goal(
             status=GoalStatus.ACTIVE.value,
         )
         db.add(goal)
+        db.flush()
+        add_memory_event(
+            db,
+            user_id=user.id,
+            event_type="goal_created",
+            entity_type="goal",
+            entity_id=goal.id,
+            source="agent",
+            summary=f"Meta criada: {goal.title} R$ {float(goal.target_amount):.2f}",
+            payload={"goal_id": goal.id, "title": goal.title, "target_amount": float(goal.target_amount)},
+        )
         db.commit()
         db.refresh(goal)
 
@@ -365,6 +401,16 @@ def update_goal_progress(phone_number: str, goal_id: int, amount: float) -> dict
         goal.current_amount = min(goal.current_amount + amount, goal.target_amount)
         if goal.current_amount >= goal.target_amount:
             goal.status = GoalStatus.COMPLETED.value
+        add_memory_event(
+            db,
+            user_id=user.id,
+            event_type="goal_contributed",
+            entity_type="goal",
+            entity_id=goal.id,
+            source="agent",
+            summary=f"Contribuição em meta: {goal.title} +R$ {float(amount):.2f}",
+            payload={"goal_id": goal.id, "amount": float(amount), "current_amount": float(goal.current_amount)},
+        )
 
         db.commit()
         db.refresh(goal)
@@ -446,6 +492,16 @@ def delete_goal(phone_number: str, goal_identifier: str) -> bool:
                 pass
         if not target:
             return False
+        add_memory_event(
+            db,
+            user_id=user.id,
+            event_type="goal_deleted",
+            entity_type="goal",
+            entity_id=target.id,
+            source="agent",
+            summary=f"Meta removida: {target.title}",
+            payload={"goal_id": target.id, "title": target.title},
+        )
         db.delete(target)
         db.commit()
         return True
@@ -492,6 +548,21 @@ def update_goal(
             target.title = new_title
         if new_deadline:
             target.deadline = new_deadline
+        add_memory_event(
+            db,
+            user_id=user.id,
+            event_type="goal_updated",
+            entity_type="goal",
+            entity_id=target.id,
+            source="agent",
+            summary=f"Meta atualizada: {target.title}",
+            payload={
+                "goal_id": target.id,
+                "new_target": new_target,
+                "new_title": new_title,
+                "new_deadline": new_deadline.isoformat() if new_deadline else None,
+            },
+        )
         db.commit()
         db.refresh(target)
         return {

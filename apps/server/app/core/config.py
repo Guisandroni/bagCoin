@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = False
     ENVIRONMENT: Literal["development", "local", "staging", "production"] = "local"
+    ENABLE_API_DOCS: bool = False
     TIMEZONE: str = "UTC"  # IANA timezone (e.g. "UTC", "Europe/Warsaw", "America/New_York")
     MODELS_CACHE_DIR: Path = Path("./models_cache")
     MEDIA_DIR: Path = Path("./media")
@@ -156,7 +157,6 @@ class Settings(BaseSettings):
     HUMANIZE_RESPONSES: bool = False
     HUMANIZE_MAX_CHARS: int = 500
     HUMANIZE_ALLOWED_INTENTS_EXTRA: list[str] = []
-    USE_TOOL_AGENTS: bool = True
     LLM_EXTRACT_TIMEOUT: float = 4.0
     IMAGE_STRUCTURED_EXTRACT: bool = True
     ECHO_AUDIO_TRANSCRIPTION: bool = False
@@ -192,6 +192,11 @@ class Settings(BaseSettings):
     EMAIL_VERIFICATION_SEND_LIMIT_PER_HOUR: int = 5
     EMAIL_VERIFICATION_SEND_LIMIT_PER_IP_PER_HOUR: int = 20
     EMAIL_VERIFICATION_VERIFY_LIMIT_PER_10_MIN: int = 10
+    FRONTEND_BASE_URL: str = "http://localhost:3000"
+    PASSWORD_RESET_TTL_SECONDS: int = 300
+    PASSWORD_RESET_REQUEST_COOLDOWN_SECONDS: int = 180
+    PASSWORD_RESET_SEND_LIMIT_PER_HOUR: int = 5
+    SUPPORT_EMAIL: str = ""
 
     # === WhatsApp Bridge ===
     WHATSAPP_BRIDGE_URL: str = "http://whatsapp-bridge:3001"

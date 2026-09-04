@@ -69,10 +69,10 @@ export const mockDashboardSummary: ReleaseDashboardSummary = {
     },
   ],
   categoryBreakdown: [
-    { name: "Moradia", percentage: 45, color: "bg-[var(--rls-primary-container)]" },
-    { name: "Alimentação", percentage: 25, color: "bg-[var(--rls-secondary-container)]" },
-    { name: "Transporte", percentage: 15, color: "bg-[var(--rls-tertiary-container)]" },
-    { name: "Lazer", percentage: 15, color: "bg-[var(--rls-outline)]" },
+    { name: "Moradia", percentage: 45, amount: 1200, color: "#7B1FA2", emoji: "🏠" },
+    { name: "Alimentação", percentage: 25, amount: 680, color: "#FF6D00", emoji: "🍽️" },
+    { name: "Transporte", percentage: 15, amount: 410, color: "#0057FF", emoji: "🚗" },
+    { name: "Lazer", percentage: 15, amount: 390, color: "#D500F9", emoji: "🎬" },
   ],
   goals: [
     { name: "Reserva de Emergência", current: 4200, target: 5000, percentage: 84 },
@@ -122,6 +122,7 @@ export const mockBudgets: ReleaseBudget[] = [
     total: 1000,
     remaining: 200,
     percentage: 80,
+    budgetDate: "2026-05-23",
   },
   {
     id: "2",
@@ -132,6 +133,7 @@ export const mockBudgets: ReleaseBudget[] = [
     total: 400,
     remaining: 20,
     percentage: 95,
+    budgetDate: "2026-05-23",
   },
   {
     id: "3",
@@ -142,6 +144,7 @@ export const mockBudgets: ReleaseBudget[] = [
     total: 500,
     remaining: 300,
     percentage: 40,
+    budgetDate: "2026-05-23",
   },
   {
     id: "4",
@@ -152,6 +155,7 @@ export const mockBudgets: ReleaseBudget[] = [
     total: 500,
     remaining: 150,
     percentage: 70,
+    budgetDate: "2026-05-23",
   },
 ]
 

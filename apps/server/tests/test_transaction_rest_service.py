@@ -7,9 +7,10 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.transaction_rest import TransactionRestService, _to_frontend_response
+from app.core.financial_categories import category_color
+from app.schemas.transaction import TransactionRestCreate, TransactionRestUpdate
 from app.services.recurring_transactions import next_run_from
-from app.schemas.transaction import TransactionRestUpdate
+from app.services.transaction_rest import TransactionRestService, _to_frontend_response
 
 
 def _tx(
@@ -46,7 +47,7 @@ def _tx(
 @pytest.mark.anyio
 async def test_summary_uses_type_and_absolute_amounts_for_legacy_negative_expenses():
     """Income/expense totals use type as truth and abs(amount) for old negative rows."""
-    user_id = uuid4()
+    user_id = 1
     rows = [
         _tx(tx_type="INCOME", amount=8500, description="Salário Maio", category="Investimentos"),
         _tx(tx_type="INCOME", amount=3000, description="Freelance Design", category="Investimentos"),
@@ -65,6 +66,22 @@ async def test_summary_uses_type_and_absolute_amounts_for_legacy_negative_expens
     assert summary.balance == pytest.approx(11141.4)
     assert summary.recent_transactions[0].type in {"INCOME", "EXPENSE"}
     assert {item["name"] for item in summary.categories} == {"Alimentação", "Transporte"}
+    assert summary.categories == [
+        {"name": "Alimentação", "amount": 245.8, "color": "#FF6D00"},
+        {"name": "Transporte", "amount": 112.8, "color": "#0057FF"},
+    ]
+
+
+def test_category_palette_uses_dashboard_colors():
+    assert category_color("Aluguel") == "#8E24AA"
+    assert category_color("Supermercado") == "#FFC107"
+    assert category_color("Restaurantes") == "#FF3B30"
+    assert category_color("Combustível") == "#001F54"
+    assert category_color("Farmácia") == "#FF1493"
+    assert category_color("Assinaturas") == "#3F51B5"
+    assert category_color("Transporte") == "#0057FF"
+    assert category_color("Lazer") == "#D500F9"
+    assert category_color("Outros") == "#424242"
 
 
 def test_frontend_response_includes_type_category_and_absolute_amount():
@@ -87,7 +104,7 @@ def test_frontend_response_includes_type_category_and_absolute_amount():
 
 @pytest.mark.anyio
 async def test_update_for_user_accepts_existing_category_id():
-    user_id = uuid4()
+    user_id = 1
     tx = _tx(
         tx_type="EXPENSE",
         amount=10,
@@ -114,7 +131,7 @@ async def test_update_for_user_accepts_existing_category_id():
 
 @pytest.mark.anyio
 async def test_update_for_user_creates_recurring_rule_when_enabled(monkeypatch):
-    user_id = uuid4()
+    user_id = 1
     tx = _tx(
         tx_type="EXPENSE",
         amount=10,
@@ -182,3 +199,47 @@ def test_recurring_next_run_uses_frequency():
     assert next_run_from(start, "weekly").date().isoformat() == "2026-05-16"
     assert next_run_from(start, "monthly").date().isoformat() == "2026-06-09"
     assert next_run_from(start, "yearly").date().isoformat() == "2027-05-09"
+
+
+@pytest.mark.anyio
+async def test_create_for_user_links_transaction_to_phone_profile(monkeypatch):
+    user_id = 1
+    db = MagicMock()
+    user_result = MagicMock()
+    user_result.scalar_one_or_none.return_value = SimpleNamespace(id=user_id)
+    db.execute = AsyncMock(return_value=user_result)
+    db.add = MagicMock()
+    db.flush = AsyncMock()
+    db.refresh = AsyncMock()
+
+    async def fake_get_or_create_phone_profile(*args, **kwargs):
+        return SimpleNamespace(id=321)
+
+    monkeypatch.setattr(
+        "app.services.transaction_rest.get_or_create_phone_profile",
+        fake_get_or_create_phone_profile,
+    )
+
+    service = TransactionRestService(db)
+    service.get_for_user = AsyncMock(  # type: ignore[method-assign]
+        return_value=_tx(
+            tx_type="EXPENSE",
+            amount=25,
+            description="Mercado",
+            category="Alimentação",
+        )
+    )
+
+    await service.create_for_user(
+        user_id,
+        TransactionRestCreate(
+            type="EXPENSE",
+            amount=25,
+            description="Mercado",
+            transaction_date="2026-05-24",
+        ),
+    )
+
+    created_tx = db.add.call_args.args[0]
+    assert created_tx.user_id == 321
+    assert created_tx.user_id == user_id

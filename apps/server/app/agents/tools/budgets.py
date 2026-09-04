@@ -6,6 +6,7 @@ from langchain_core.tools import BaseTool, tool
 
 from app.agents import responses as resp
 from app.agents.pending_actions import save_pending_action
+from app.core.financial_categories import resolve_default_category_name
 from app.services.budget_service import get_budgets
 
 
@@ -17,11 +18,18 @@ def create_budget_tools(phone_number: str, context: dict | None = None) -> list[
         """Prepare a category budget for confirmation before creating it."""
         if total_limit <= 0:
             return "Qual e o limite do orcamento?"
-        summary = f"Vou criar orcamento de R$ {float(total_limit):,.2f} para {name} ({period})."
+        clean_name = resolve_default_category_name((name or "").strip() or "Outros")
+        clean_period = "monthly"
+        summary = resp.budget_confirmation(clean_name, float(total_limit), clean_period)
         return save_pending_action(
             phone_number,
             action="create_budget",
-            params={"name": name, "total_limit": float(total_limit), "period": period},
+            params={
+                "name": clean_name,
+                "total_limit": float(total_limit),
+                "period": clean_period,
+                "budget_type": "category",
+            },
             summary=summary,
             channel=channel,
         )

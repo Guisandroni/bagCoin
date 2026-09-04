@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -23,8 +21,8 @@ class RecurringTransaction(Base, TimestampMixin):
     __tablename__ = "recurring_transactions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_uuid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    user_id: Mapped[int] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,

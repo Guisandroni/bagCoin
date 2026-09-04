@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { GoogleLogin } from "@react-oauth/google";
+// import { GoogleLogin } from "@react-oauth/google";
 import { Mail, Lock, ArrowRight } from "lucide-react";
 import { loginSchema } from "@/lib/validations";
 import { PillInput } from "./pill-input";
-import { AuthCard, AuthHeader, AuthDivider, AuthFooter } from "./auth-card";
+import { AuthCard, AuthHeader, AuthFooter } from "./auth-card";
+// import { AuthDivider } from "./auth-card";
 import { ToastBanner } from "./toast-banner";
 
 interface LoginCardProps {
@@ -20,7 +21,7 @@ interface LoginCardProps {
 
 export function LoginCard({
   onLogin,
-  onGoogleLogin,
+  // onGoogleLogin,
   onRegisterClick,
   onForgotPassword,
   isLoading,
@@ -30,8 +31,8 @@ export function LoginCard({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [googleError, setGoogleError] = useState<string | null>(null);
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
+  // const [googleError, setGoogleError] = useState<string | null>(null);
+  // const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,11 +53,11 @@ export function LoginCard({
   return (
     <div className="rls min-h-dvh bg-[var(--rls-background)] flex flex-col items-center justify-center p-[var(--rls-container-margin)]">
       <ToastBanner
-        isOpen={!!(errorMessage || googleError)}
-        message={errorMessage || googleError || ""}
+        isOpen={!!errorMessage}
+        message={errorMessage || ""}
         variant="error"
         onClose={() => {
-          setGoogleError(null);
+          // setGoogleError(null);
           onDismissError?.();
         }}
       />
@@ -102,7 +103,7 @@ export function LoginCard({
             }}
           />
 
-          {/*<div className="flex justify-end -mt-2">
+          <div className="flex justify-end -mt-2">
             <button
               type="button"
               onClick={onForgotPassword}
@@ -110,7 +111,7 @@ export function LoginCard({
             >
               Esqueceu a senha?
             </button>
-          </div>*/}
+          </div>
 
           <button
             type="submit"
@@ -122,6 +123,7 @@ export function LoginCard({
           </button>
         </form>
 
+        {/*
         <AuthDivider text="ou entre com" />
 
         {googleClientId ? (
@@ -154,6 +156,7 @@ export function LoginCard({
             Google indisponível
           </button>
         )}
+        */}
 
         <AuthFooter
           text="Não tem uma conta?"

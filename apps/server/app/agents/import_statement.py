@@ -7,11 +7,15 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from app.agents import responses as resp
 from app.agents.persistence import get_or_create_user
 from app.agents.statement_parser import parse_statement
+from app.core.financial_categories import resolve_default_category_name
 from app.db.models.category import Category
+from app.db.models.phone_conversation import PhoneConversation
 from app.db.models.transaction import Transaction
 from app.db.session import sync_session_maker
+from app.services.agent_memory_service import add_memory_event
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +66,7 @@ def _map_category_to_db(category_name: str) -> str:
         "Doacao": "Doação",
         "Doação": "Doação",
     }
-    return mapping.get(category_name, "Outros")
+    return resolve_default_category_name(mapping.get(category_name, category_name or "Outros"))
 
 
 def import_parsed_transactions(
@@ -76,10 +80,17 @@ def import_parsed_transactions(
     try:
         user = get_or_create_user(phone_number, db)
         user_id = user.id
+        conversation = (
+            db.query(PhoneConversation)
+            .filter(PhoneConversation.user_id == user_id)
+            .order_by(PhoneConversation.updated_at.desc())
+            .first()
+        )
 
         imported = 0
         skipped = 0
         errors = []
+        imported_transactions: list[dict[str, Any]] = []
 
         for tx in transactions:
             try:
@@ -138,31 +149,72 @@ def import_parsed_transactions(
                     raw_input=tx.get("raw", ""),
                 )
                 db.add(db_tx)
+                db.flush()
                 imported += 1
+                imported_transactions.append({
+                    "type": tx["type"].upper(),
+                    "amount": float(tx["amount"]),
+                    "category": cat_name,
+                    "description": tx["description"],
+                    "transaction_date": tx_date,
+                })
+                add_memory_event(
+                    db,
+                    user_id=user_id,
+                    conversation_id=conversation.id if conversation else None,
+                    event_type="transaction_created",
+                    entity_type="transaction",
+                    entity_id=db_tx.id,
+                    source=source_format,
+                    summary=(
+                        f"{tx['type'].upper()} R$ {float(tx['amount']):.2f} "
+                        f"em {cat_name}: {tx['description']}"
+                    ),
+                    payload={
+                        "transaction_id": db_tx.id,
+                        "type": tx["type"].upper(),
+                        "amount": float(tx["amount"]),
+                        "category": cat_name,
+                        "description": tx["description"],
+                        "source_format": source_format,
+                        "transaction_date": tx_date.isoformat(),
+                    },
+                )
             except Exception as e:
                 logger.warning(f"Erro ao importar transação {tx}: {e}")
                 errors.append(str(e))
                 continue
 
-        db.commit()
+        if imported or skipped:
+            add_memory_event(
+                db,
+                user_id=user_id,
+                conversation_id=conversation.id if conversation else None,
+                event_type="document_import_processed",
+                entity_type="document",
+                source=source_format,
+                summary=f"{imported} transação(ões) importada(s), {skipped} duplicata(s) ignorada(s).",
+                payload={
+                    "source_format": source_format,
+                    "imported_count": imported,
+                    "skipped_count": skipped,
+                    "error_count": len(errors),
+                },
+            )
 
-        incomes = [t for t in transactions if t["type"] == "INCOME"]
-        expenses = [t for t in transactions if t["type"] == "EXPENSE"]
-        total_income = sum(t["amount"] for t in incomes)
-        total_expense = sum(t["amount"] for t in expenses)
+        db.commit()
 
         return {
             "imported_count": imported,
             "skipped_count": skipped,
             "import_errors": errors,
-            "import_summary": (
-                f"Extrato Importado com Sucesso!\n\n"
-                f"{imported} transações importadas\n"
-                f"{skipped} duplicatas ignoradas\n"
-                f"{len(incomes)} receitas (R$ {total_income:,.2f})\n"
-                f"{len(expenses)} despesas (R$ {total_expense:,.2f})\n"
-            )
-            + (f"\n{len(errors)} erros menores (ignorados)" if errors else ""),
+            "imported_transactions": imported_transactions,
+            "import_summary": resp.document_imported(
+                imported_transactions,
+                skipped,
+                errors,
+                label="Extrato",
+            ),
         }
     finally:
         db.close()

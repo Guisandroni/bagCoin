@@ -2,8 +2,6 @@
 
 from datetime import datetime
 from typing import Literal
-from uuid import UUID
-
 from pydantic import Field
 
 from app.schemas.base import BaseSchema, TimestampSchema
@@ -40,7 +38,7 @@ class AccountUpdate(BaseSchema):
 class AccountResponse(AccountBase, TimestampSchema):
     """Schema for reading an account."""
 
-    id: UUID
-    user_id: UUID
+    id: int
+    user_id: int
     created_at: datetime
     updated_at: datetime | None = None

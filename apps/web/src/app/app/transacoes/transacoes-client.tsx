@@ -50,20 +50,10 @@ export function TransacoesClient({ transactions, categories = [] }: Props) {
           ])
         ).values()
       )
-  const totalSpent = transactions
-    .filter((t) => t.type === "despesa")
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-
-  const totalReceived = transactions
-    .filter((t) => t.type === "receita")
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-
   return (
     <>
       <TransactionsView
         transactions={transactions}
-        totalSpent={totalSpent}
-        totalReceived={totalReceived}
         navItems={navItems}
         onSelectTransaction={setSelectedTransaction}
         onAddTransaction={() => setCreateOpen(true)}

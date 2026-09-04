@@ -145,9 +145,20 @@ async def test_upload_file(
     assert data["file_type"] == "text"
 
     # Verify validation was called
-    mock_file_upload_service.validate_upload.assert_called_once_with("text/plain", 13)
+    mock_file_upload_service.validate_upload.assert_called_once_with("text/plain", 13, "hello.txt")
 
     app.dependency_overrides.pop(get_file_upload_service, None)
+
+
+def test_validate_upload_accepts_ofx_mime_and_extension():
+    assert FileUploadService.validate_upload("application/ofx", 10, "extrato.ofx") == (True, None)
+    assert FileUploadService.validate_upload("text/ofx", 10, "extrato.ofx") == (True, None)
+    assert FileUploadService.validate_upload("application/x-ofx", 10, "extrato.ofx") == (True, None)
+    assert FileUploadService.validate_upload("application/octet-stream", 10, "extrato.ofx") == (
+        True,
+        None,
+    )
+    assert FileUploadService.classify_file("application/octet-stream", "extrato.ofx") == "text"
 
 
 @pytest.mark.anyio

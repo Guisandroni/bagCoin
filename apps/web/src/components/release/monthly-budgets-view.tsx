@@ -105,6 +105,9 @@ export function MonthlyBudgetsView({
                   iconColor={budget.categoryColor}
                   percentageClassName="text-[var(--rls-primary-container)]"
                   remainingClassName="text-[var(--rls-on-surface-variant)]"
+                  titleTrailing={
+                    <BudgetDateMeta date={budget.budgetDate} period={budget.period} />
+                  }
                 />
               </button>
             )
@@ -117,6 +120,32 @@ export function MonthlyBudgetsView({
       ) : null}
     </div>
   )
+}
+
+function BudgetDateMeta({ date, period }: { date?: string; period?: string }) {
+  return (
+    <div className="flex flex-col items-end">
+      <span className="rls-text-label-lg text-[var(--rls-on-surface)]">
+        {formatBudgetDate(date)}
+      </span>
+      <span className="rls-text-label-md text-[var(--rls-on-surface-variant)]">
+        {formatBudgetPeriod(period)}
+      </span>
+    </div>
+  )
+}
+
+function formatBudgetDate(value?: string): string {
+  if (!value) return "--/--"
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number)
+  if (!year || !month || !day) return "--/--"
+  const date = new Date(year, month - 1, day)
+  const monthName = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(date)
+  return `${day}/${monthName}`
+}
+
+function formatBudgetPeriod(period?: string): string {
+  return period === "monthly" || !period ? "mensal" : period
 }
 
 function formatBudgetRemaining(value: number): string {

@@ -1,6 +1,6 @@
 """Unit tests for orchestrator final response persistence."""
 
-from app.agents.orchestrator import build_response_node, finalize_response_node
+from app.agents.nodes.chat import build_response_node, finalize_response_node
 from app.schemas.enums import IntentType
 
 
@@ -31,9 +31,9 @@ def _state(response: str = "Resposta crua"):
 
 def test_finalize_response_saves_history_once(monkeypatch):
     calls = []
-    monkeypatch.setattr("app.agents.orchestrator.should_humanize", lambda state: False)
+    monkeypatch.setattr("app.agents.nodes.chat.should_humanize", lambda state: False)
     monkeypatch.setattr(
-        "app.agents.orchestrator.save_message_to_history",
+        "app.agents.nodes.chat.save_message_to_history",
         lambda phone, role, content: calls.append((role, content)),
     )
 
@@ -49,13 +49,13 @@ def test_finalize_response_saves_history_once(monkeypatch):
 
 def test_finalize_response_saves_humanized_text(monkeypatch):
     calls = []
-    monkeypatch.setattr("app.agents.orchestrator.should_humanize", lambda state: True)
+    monkeypatch.setattr("app.agents.nodes.chat.should_humanize", lambda state: True)
     monkeypatch.setattr(
-        "app.agents.orchestrator.humanize_safely",
+        "app.agents.nodes.chat.humanize_safely",
         lambda raw, state: "Resposta humanizada",
     )
     monkeypatch.setattr(
-        "app.agents.orchestrator.save_message_to_history",
+        "app.agents.nodes.chat.save_message_to_history",
         lambda phone, role, content: calls.append((role, content)),
     )
 

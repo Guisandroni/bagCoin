@@ -21,7 +21,7 @@ export function SettingsDrawer() {
       orcamentos: "/app/orcamentos",
       metas: "/app/metas",
       perfil: "/app/perfil",
-      relatorios: "/app/relatorios",
+      suporte: "/app/suporte",
     }
 
     if (s === "whatsapp" || s === "telegram") {
@@ -66,6 +66,6 @@ function getActiveSection(pathname: string): string {
   if (pathname.startsWith("/app/orcamentos")) return "orcamentos"
   if (pathname.startsWith("/app/metas")) return "metas"
   if (pathname.startsWith("/app/perfil")) return "perfil"
-  if (pathname.startsWith("/app/relatorios")) return "relatorios"
+  if (pathname.startsWith("/app/suporte")) return "suporte"
   return ""
 }

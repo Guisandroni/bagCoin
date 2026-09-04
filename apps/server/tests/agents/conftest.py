@@ -2,6 +2,7 @@
 
 All tests here run without real DB or LLM — everything is mocked.
 """
+
 import uuid
 from unittest.mock import MagicMock
 
@@ -13,7 +14,6 @@ def mock_no_llm(monkeypatch):
     """Force deterministic path — patch get_llm to return None in all agent modules."""
     monkeypatch.setattr("app.agents.normalization.get_llm", lambda **kw: None)
     monkeypatch.setattr("app.agents.ingestion.get_llm", lambda **kw: None)
-    monkeypatch.setattr("app.agents.budget_goal.get_llm", lambda **kw: None)
 
 
 @pytest.fixture
@@ -29,10 +29,6 @@ def mock_llm_response(monkeypatch):
         )
         monkeypatch.setattr(
             "app.agents.ingestion.timed_invoke",
-            lambda llm, msgs, operation="": (response, 200.0),
-        )
-        monkeypatch.setattr(
-            "app.agents.budget_goal.timed_invoke",
             lambda llm, msgs, operation="": (response, 200.0),
         )
 
@@ -54,7 +50,7 @@ def mock_list_categories(monkeypatch):
             {"name": "Saúde", "is_default": True},
             {"name": "Lazer", "is_default": True},
         ]
-        for name in (extra or []):
+        for name in extra or []:
             cats.append({"name": name, "is_default": False})
 
         import app.agents.persistence as persistence_module

@@ -70,6 +70,7 @@ export function OrcamentosClient({ budgets, categories = [], totalSpent, totalBu
               category_id: data.category_id,
               category_name: data.category_name,
               period: data.period,
+              budget_date: data.budget_date,
               total_limit: data.total_limit,
               budget_type: data.budget_type,
             },
@@ -98,6 +99,7 @@ export function OrcamentosClient({ budgets, categories = [], totalSpent, totalBu
             category_id: payload.category_id,
             category_name: payload.category_name,
             period: payload.period,
+            budget_date: payload.budget_date,
             total_limit: payload.total_limit,
             budget_type: payload.budget_type,
           })

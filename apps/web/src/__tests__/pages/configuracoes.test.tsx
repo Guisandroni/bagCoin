@@ -51,4 +51,13 @@ describe("ConfiguracoesPage", () => {
     expect(mockSetTheme).toHaveBeenCalledWith("dark")
     expect(mockSetTheme).toHaveBeenCalledWith("system")
   })
+
+  it("não renderiza o formulário de suporte dentro das configurações", () => {
+    render(<ConfiguracoesPage />)
+
+    expect(screen.queryByText("Suporte")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Assunto")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Mensagem para o suporte")).not.toBeInTheDocument()
+    expect(screen.queryByText("Enviar mensagem")).not.toBeInTheDocument()
+  })
 })

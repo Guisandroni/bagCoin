@@ -14,12 +14,12 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import JsonOutputParser
 
+from app.core.config import settings
 from app.core.financial_categories import (
     DEFAULT_FINANCIAL_CATEGORIES,
     normalize_category_key,
     resolve_default_category_name,
 )
-from app.core.config import settings
 from app.services.llm_service import get_llm, timed_invoke
 
 logger = logging.getLogger(__name__)
@@ -133,6 +133,9 @@ CATEGORY_KEYWORDS = {
         "presente",
         "pai",
         "mae",
+        "pix",
+        "transferencia",
+        "deposito",
     ],
 }
 
@@ -163,7 +166,7 @@ def _suggest_category(text: str, user_cats: list[str] | None = None) -> str:
     text_norm = _norm(text)
 
     # 1. User-created categories take priority (substring match)
-    for name in (user_cats or []):
+    for name in user_cats or []:
         if _norm(name) in text_norm or text_norm in _norm(name):
             return name
 
@@ -245,7 +248,7 @@ def _regex_extract(message: str, user_cats: list[str] | None = None) -> dict[str
             if has_dot and has_comma:
                 last_sep_pos = max(amount_str.rfind("."), amount_str.rfind(","))
                 before = amount_str[:last_sep_pos].replace(".", "").replace(",", "")
-                after = amount_str[last_sep_pos + 1:]
+                after = amount_str[last_sep_pos + 1 :]
                 amount_str = before + "." + after
             elif has_dot:
                 dot_pos = amount_str.rfind(".")
@@ -266,9 +269,20 @@ def _regex_extract(message: str, user_cats: list[str] | None = None) -> dict[str
 
     # 2. Type detection
     income_signals = [
-        "recebi", "ganhei", "salário", "salario", "renda", "entrada",
-        "pagamento recebido", "me mandaram", "me mandou", "me enviaram",
-        "depositaram", "caiu", "mesada", "aluguel recebido",
+        "recebi",
+        "ganhei",
+        "salário",
+        "salario",
+        "renda",
+        "entrada",
+        "pagamento recebido",
+        "me mandaram",
+        "me mandou",
+        "me enviaram",
+        "depositaram",
+        "caiu",
+        "mesada",
+        "aluguel recebido",
     ]
     transfer_signals = ["transferi", "enviei", "mandei", "fiz pix", "passei para", "transferência"]
 
@@ -441,38 +455,87 @@ def _merge_results(
 
 ESTABLISHMENT_CATEGORY_HINTS: dict[str, tuple[str, ...]] = {
     "Supermercado": (
-        "mercado", "supermercado", "extra", "carrefour", "dia",
-        "atacadao", "assai", "hortifruti", "sams club", "makro",
+        "mercado",
+        "supermercado",
+        "extra",
+        "carrefour",
+        "dia",
+        "atacadao",
+        "assai",
+        "hortifruti",
+        "sams club",
+        "makro",
     ),
     "Farmácia": (
-        "farmacia", "drogaria", "drogasil", "raia", "pacheco",
-        "ultrafarma", "araujo", "nissei",
+        "farmacia",
+        "drogaria",
+        "drogasil",
+        "raia",
+        "pacheco",
+        "ultrafarma",
+        "araujo",
+        "nissei",
     ),
     "Restaurantes": (
-        "restaurante", "bar", "cafeteria", "cafe ", "pizzaria",
-        "lanchonete", "cantina", "churrascaria", "hamburgueria",
+        "restaurante",
+        "bar",
+        "cafeteria",
+        "cafe ",
+        "pizzaria",
+        "lanchonete",
+        "cantina",
+        "churrascaria",
+        "hamburgueria",
     ),
     "Delivery": ("ifood", "rappi", "uber eats", "99food", "loggi"),
     "Transporte": ("uber", "99 pop", "99pop", "metro ", "cptm", "cet "),
     "Combustível": (
-        "posto", "shell", "ipiranga", "petrobras", "br mania",
-        "ale combustiveis", "raizen",
+        "posto",
+        "shell",
+        "ipiranga",
+        "petrobras",
+        "br mania",
+        "ale combustiveis",
+        "raizen",
     ),
     "Vestuário": (
-        "loja", "riachuelo", "renner", "c&a", "marisa", "zara",
-        "lebes", "pernambucanas",
+        "loja",
+        "riachuelo",
+        "renner",
+        "c&a",
+        "marisa",
+        "zara",
+        "lebes",
+        "pernambucanas",
     ),
     "Saúde": (
-        "clinica", "hospital", "laboratorio", "fleury", "sabin",
-        "hapvida", "unimed", "amil",
+        "clinica",
+        "hospital",
+        "laboratorio",
+        "fleury",
+        "sabin",
+        "hapvida",
+        "unimed",
+        "amil",
     ),
     "Lazer": (
-        "cinemark", "cinepolis", "kinoplex", "uci cinemas",
-        "netflix", "spotify", "disney", "hbo",
+        "cinemark",
+        "cinepolis",
+        "kinoplex",
+        "uci cinemas",
+        "netflix",
+        "spotify",
+        "disney",
+        "hbo",
     ),
     "Tecnologia": (
-        "kabum", "magazine luiza", "americanas", "submarino",
-        "fast shop", "casas bahia", "ponto frio",
+        "kabum",
+        "magazine luiza",
+        "americanas",
+        "submarino",
+        "fast shop",
+        "casas bahia",
+        "ponto frio",
     ),
 }
 
@@ -496,17 +559,27 @@ def _extract_from_image_receipt(state: dict[str, Any]) -> dict[str, Any] | None:
     img = state.get("context", {}).get("image_structured")
     if not img or not img.get("is_receipt") or not img.get("total_amount"):
         return None
+    try:
+        from app.agents.document_understanding import _normalize_receipt_payload
+        from app.agents.tools.documents import _receipt_category, _receipt_transaction_type
+
+        img = _normalize_receipt_payload(img)
+        tx_type = _receipt_transaction_type(img) or "EXPENSE"
+        category = _receipt_category(img)
+    except Exception:
+        tx_type = "EXPENSE"
+        category = _category_from_establishment(img.get("establishment"))
     establishment = img.get("establishment") or "Comprovante"
     try:
         amount = float(img["total_amount"])
     except (TypeError, ValueError):
         return None
     return {
-        "type": "EXPENSE",
+        "type": tx_type,
         "amount": amount,
         "currency": "BRL",
-        "category": _category_from_establishment(establishment),
-        "description": str(establishment),
+        "category": category,
+        "description": str(img.get("description") or establishment),
         "date": img.get("transaction_date"),
         "confidence": float(img.get("confidence", 0.85) or 0.85),
         "raw_text": img.get("raw_text", state.get("message", "")),

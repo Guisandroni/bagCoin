@@ -30,13 +30,20 @@ class FileUploadService:
         self.db = db
 
     @staticmethod
-    def validate_upload(content_type: str | None, size: int) -> tuple[bool, str | None]:
+    def validate_upload(
+        content_type: str | None,
+        size: int,
+        filename: str | None = None,
+    ) -> tuple[bool, str | None]:
         """Validate file type and size.
 
         Returns:
             Tuple of (is_valid, error_message).
         """
-        if content_type not in ALLOWED_MIME_TYPES:
+        normalized_type = content_type or "application/octet-stream"
+        extension = (filename or "").lower().rsplit(".", 1)[-1] if filename and "." in filename else ""
+        allowed_by_extension = extension in {"ofx", "qfx"}
+        if normalized_type not in ALLOWED_MIME_TYPES and not allowed_by_extension:
             return False, f"File type '{content_type}' is not supported."
         if size > MAX_UPLOAD_SIZE:
             return False, f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024 * 1024)}MB."
@@ -75,7 +82,7 @@ class FileUploadService:
 
     @staticmethod
     def _parse_pdf_content(data: bytes) -> str | None:
-        """Extract text from PDF using PyMuPDF."""
+        """Extract text from PDF using table-aware PyMuPDF when available."""
         try:
             import pymupdf
 
@@ -100,7 +107,19 @@ class FileUploadService:
             doc.close()
             return "\n\n".join(texts) if texts else None
         except Exception as e:
-            logger.warning(f"PDF parsing failed: {e}")
+            logger.warning(f"PyMuPDF PDF parsing failed: {e}")
+
+        try:
+            import io
+
+            import PyPDF2
+
+            reader = PyPDF2.PdfReader(io.BytesIO(data))
+            texts = [page.extract_text() or "" for page in reader.pages]
+            parsed = "\n".join(text for text in texts if text).strip()
+            return parsed or None
+        except Exception as e:
+            logger.warning(f"PyPDF2 PDF parsing failed: {e}")
             return None
 
     @staticmethod

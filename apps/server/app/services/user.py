@@ -1,10 +1,9 @@
 """User service (PostgreSQL async).
 
-Contains business logic for user operations. Uses UserRepository for database access.
+Contains business logic for user operations.
 """
 
 from typing import TYPE_CHECKING, Any
-from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,12 +28,8 @@ class UserService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_by_id(self, user_id: UUID) -> User:
-        """Get user by ID.
-
-        Raises:
-            NotFoundError: If user does not exist.
-        """
+    async def get_by_id(self, user_id: int) -> User:
+        """Get user by ID."""
         user = await user_repo.get_by_id(self.db, user_id)
         if not user:
             raise NotFoundError(
@@ -44,47 +39,38 @@ class UserService:
         return user
 
     async def get_by_email(self, email: str) -> User | None:
-        """Get user by email. Returns None if not found."""
         return await user_repo.get_by_email(self.db, email)
 
-    async def get_multi(
-        self,
-        *,
-        skip: int = 0,
-        limit: int = 100,
-    ) -> list[User]:
-        """Get multiple users with pagination."""
+    async def get_by_phone_number(self, phone_number: str) -> User | None:
+        return await user_repo.get_by_phone_number(self.db, phone_number)
+
+    async def get_or_create_by_phone(
+        self, phone_number: str, name: str | None = None, platform: str = "whatsapp"
+    ) -> User:
+        return await user_repo.get_or_create_by_phone(
+            self.db, phone_number=phone_number, name=name, platform=platform
+        )
+
+    async def get_multi(self, *, skip: int = 0, limit: int = 100) -> list[User]:
         return await user_repo.get_multi(self.db, skip=skip, limit=limit)
 
     async def list_paginated(self) -> Any:
-        """Return paginated user list (fastapi-pagination Page)."""
         from fastapi_pagination.ext.sqlalchemy import paginate
-
         return await paginate(self.db, user_repo.list_query())
 
     async def delete_non_admins(self) -> int:
-        """Bulk-delete users without the admin role. Returns affected row count."""
         return await user_repo.delete_non_admins(self.db)
 
     async def has_any(self) -> bool:
-        """Return True if at least one user exists."""
         return await user_repo.has_any(self.db)
 
     async def admin_list_with_counts(
-        self,
-        *,
-        skip: int = 0,
-        limit: int = 50,
-        search: str | None = None,
+        self, *, skip: int = 0, limit: int = 50, search: str | None = None
     ) -> "AdminUserList":
-        """Admin: list users with conversation counts."""
         from app.schemas.conversation_share import AdminUserList, AdminUserRead
 
         rows, total = await user_repo.admin_list_with_counts(
-            self.db,
-            skip=skip,
-            limit=limit,
-            search=search,
+            self.db, skip=skip, limit=limit, search=search
         )
         items = [
             AdminUserRead(
@@ -100,18 +86,12 @@ class UserService:
         return AdminUserList(items=items, total=total)
 
     async def register(self, user_in: UserCreate) -> User:
-        """Register a new user.
-
-        Raises:
-            AlreadyExistsError: If email is already registered.
-        """
         existing = await user_repo.get_by_email(self.db, user_in.email)
         if existing:
             raise AlreadyExistsError(
                 message="Email já cadastrado",
                 details={"email": user_in.email},
             )
-
         hashed_password = get_password_hash(user_in.password)
         return await user_repo.create(
             self.db,
@@ -119,20 +99,11 @@ class UserService:
             hashed_password=hashed_password,
             full_name=user_in.full_name,
             phone_number=user_in.phone_number,
+            auth_provider="email",
             role=user_in.role.value,
         )
 
     async def google_auth(self, request: GoogleLoginRequest) -> User:
-        """Authenticate or register a user via Google OAuth.
-
-        Verifies the Google ID token, then either:
-        - Returns existing user with matching google_id
-        - Returns existing user with matching email (links Google account)
-        - Creates a new user
-
-        Raises:
-            AuthenticationError: If the Google token is invalid.
-        """
         google_payload = verify_google_token(request.id_token) if request.id_token else None
         if not google_payload and request.access_token:
             google_payload = await verify_google_access_token(request.access_token)
@@ -170,11 +141,6 @@ class UserService:
         )
 
     async def authenticate(self, email: str, password: str) -> User:
-        """Authenticate user by email and password.
-
-        Raises:
-            AuthenticationError: If credentials are invalid or user is inactive.
-        """
         user = await user_repo.get_by_email(self.db, email)
         if (
             not user
@@ -192,30 +158,17 @@ class UserService:
             )
         return user
 
-    async def update(self, user_id: UUID, user_in: UserUpdate) -> User:
-        """Update user.
-
-        Raises:
-            NotFoundError: If user does not exist.
-        """
+    async def update(self, user_id: int, user_in: UserUpdate) -> User:
         user = await self.get_by_id(user_id)
-
         update_data = user_in.model_dump(exclude_unset=True)
         if "password" in update_data:
             update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
-
         return await user_repo.update(self.db, db_user=user, update_data=update_data)
 
     async def update_avatar(
-        self, user_id: UUID, file_data: bytes, filename: str, content_type: str
+        self, user_id: int, file_data: bytes, filename: str, content_type: str
     ) -> User:
-        """Upload or replace avatar image.
-
-        Raises:
-            ValueError: If content type is not allowed or file is too large.
-        """
         import contextlib
-
         from app.services.file_storage import get_file_storage
 
         ALLOWED_AVATAR_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
@@ -225,23 +178,15 @@ class UserService:
             raise ValueError("Avatar image too large. Maximum 2MB.")
 
         storage = get_file_storage()
-
-        # Delete old avatar if exists
         user = await self.get_by_id(user_id)
         if user.avatar_url:
             with contextlib.suppress(Exception):
                 await storage.delete(user.avatar_url)
 
-        # Save new avatar
         storage_path = await storage.save(f"avatars/{user_id}", filename, file_data)
         return await user_repo.update_avatar(self.db, user_id, storage_path)
 
-    async def delete(self, user_id: UUID) -> User:
-        """Delete user.
-
-        Raises:
-            NotFoundError: If user does not exist.
-        """
+    async def delete(self, user_id: int) -> User:
         user = await user_repo.delete(self.db, user_id)
         if not user:
             raise NotFoundError(

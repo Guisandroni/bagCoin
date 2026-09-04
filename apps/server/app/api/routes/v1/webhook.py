@@ -13,7 +13,7 @@ import secrets
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import FileResponse
 
-from app.agents.orchestrator import orchestrator
+from app.agents.graph import orchestrator
 from app.agents.persistence import get_or_create_user_sync
 from app.agents.tenant_context import tenant_phone_error
 from app.api.deps import verify_api_key as verify_telegram_api_key
@@ -60,15 +60,17 @@ def normalize_whatsapp_id(chat_id: str) -> str:
 
 
 def is_duplicate_message(message_id: str) -> bool:
-    """Retorna True se a mensagem já foi processada nos últimos 60 segundos."""
+    """Retorna True se a mensagem já foi processada nos últimos 60 segundos.
+
+    Uses atomic SET NX to prevent race conditions with multiple workers.
+    """
     r = _get_redis()
     if not message_id or not r:
         return False
     key = f"msg:processed:{message_id}"
-    if r.exists(key):
-        return True
-    r.setex(key, 60, "1")
-    return False
+    # SET NX is atomic: returns True only if the key was set (first caller wins)
+    was_set = r.set(key, "1", nx=True, ex=60)
+    return not was_set  # If was_set is False/None, key already existed → duplicate
 
 
 def _source_format_from_payload(message_type: str | None, media: dict | None = None) -> str:
@@ -234,11 +236,11 @@ async def receive_telegram_message(
         logger.warning(f"Telegram webhook rejeitado — telefone inválido: {phone_number!r}")
         return TelegramResponse(reply=f"⚠️ {terr}", actions=[])
 
-    # 2. Busca ou cria PhoneUser para garantir que existe
+    # 2. Busca ou cria usuário unificado para garantir que existe
     try:
         get_or_create_user_sync(phone_number)
     except Exception as e:
-        logger.error(f"Erro ao buscar/criar PhoneUser para {phone_number}: {e}")
+        logger.error(f"Erro ao buscar/criar usuário para {phone_number}: {e}")
         return TelegramResponse(
             reply="Erro ao identificar usuário. Tente novamente.",
             actions=[],

@@ -104,6 +104,8 @@ export async function getTransactions(params?: {
   page?: number
   skip?: number
   limit?: number
+  date_from?: string
+  date_to?: string
 }): Promise<{ items: ServerTransaction[]; total: number } | null> {
   const qs = new URLSearchParams()
   if (params?.search) qs.set("search", params.search)
@@ -112,6 +114,8 @@ export async function getTransactions(params?: {
   if (params?.page) qs.set("page", String(params.page))
   if (params?.skip !== undefined) qs.set("skip", String(params.skip))
   if (params?.limit) qs.set("limit", String(params.limit))
+  if (params?.date_from) qs.set("date_from", params.date_from)
+  if (params?.date_to) qs.set("date_to", params.date_to)
   const query = qs.toString()
   return serverFetch(`/bagcoin/transactions${query ? `?${query}` : ""}`)
 }
@@ -125,6 +129,7 @@ export interface ServerBudget {
   total_remaining: number
   percentage: number
   budget_type: string
+  budget_date?: string
   category_id: number | null
   category_name: string | null
   created_at: string

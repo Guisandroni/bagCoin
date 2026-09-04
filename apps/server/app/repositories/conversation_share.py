@@ -15,7 +15,7 @@ async def get_by_id(db: AsyncSession, share_id: UUID) -> ConversationShare | Non
 
 
 async def get_share(
-    db: AsyncSession, conversation_id: UUID, shared_with: UUID
+    db: AsyncSession, conversation_id: UUID, shared_with: int
 ) -> ConversationShare | None:
     """Get a share by conversation + user composite key."""
     result = await db.execute(
@@ -48,7 +48,7 @@ async def get_shares_for_conversation(
 
 
 async def get_conversations_shared_with_user(
-    db: AsyncSession, user_id: UUID, *, skip: int = 0, limit: int = 50
+    db: AsyncSession, user_id: int, *, skip: int = 0, limit: int = 50
 ) -> list[Conversation]:
     """Get conversations shared with a specific user."""
     result = await db.execute(
@@ -62,7 +62,7 @@ async def get_conversations_shared_with_user(
     return list(result.scalars().all())
 
 
-async def count_conversations_shared_with_user(db: AsyncSession, user_id: UUID) -> int:
+async def count_conversations_shared_with_user(db: AsyncSession, user_id: int) -> int:
     """Count conversations shared with a specific user."""
     result = await db.scalar(
         select(func.count())
@@ -73,7 +73,7 @@ async def count_conversations_shared_with_user(db: AsyncSession, user_id: UUID) 
 
 
 async def user_has_access(
-    db: AsyncSession, conversation_id: UUID, user_id: UUID
+    db: AsyncSession, conversation_id: UUID, user_id: int
 ) -> ConversationShare | None:
     """Check if user has any share access to a conversation."""
     return await get_share(db, conversation_id, user_id)
@@ -83,8 +83,8 @@ async def create(
     db: AsyncSession,
     *,
     conversation_id: UUID,
-    shared_by: UUID,
-    shared_with: UUID | None = None,
+    shared_by: int,
+    shared_with: int | None = None,
     share_token: str | None = None,
     permission: str = "view",
 ) -> ConversationShare:

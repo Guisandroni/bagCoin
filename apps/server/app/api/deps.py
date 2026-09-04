@@ -118,15 +118,12 @@ async def get_current_user(
     Raises:
         AuthenticationError: If token is invalid or user not found.
     """
-    from uuid import UUID
-
     from app.core.security import verify_token
 
     payload = verify_token(token)
     if payload is None:
         raise AuthenticationError(message="Invalid or expired token")
 
-    # Ensure this is an access token, not a refresh token
     if payload.get("type") != "access":
         raise AuthenticationError(message="Invalid token type")
 
@@ -134,7 +131,7 @@ async def get_current_user(
     if user_id is None:
         raise AuthenticationError(message="Invalid token payload")
 
-    user = await user_service.get_by_id(UUID(user_id))
+    user = await user_service.get_by_id(int(user_id))
     if not user.is_active:
         raise AuthenticationError(message="User account is disabled")
 
@@ -238,22 +235,7 @@ async def get_current_user_ws(
     websocket: WebSocket,
     access_token: str | None = Cookie(None),
 ) -> User:
-    """Authenticate a WebSocket connection.
-
-    Token sources, checked in order:
-    1. ``Sec-WebSocket-Protocol`` header, in the form ``access_token.<JWT>``.
-       The chosen application subprotocol (e.g. ``chat``) is echoed back on
-       ``accept()`` via ``websocket.state.accept_subprotocol``.
-    2. Same-origin ``access_token`` cookie (fallback for same-origin clients).
-
-    Tokens in query strings are NOT accepted — they leak into logs and
-    Referer headers.
-
-    Raises:
-        AuthenticationError: If token is invalid or user not found.
-    """
-    from uuid import UUID
-
+    """Authenticate a WebSocket connection."""
     from app.core.security import verify_token
 
     subprotocol_token, app_subprotocol = _extract_ws_auth(websocket)
@@ -283,14 +265,12 @@ async def get_current_user_ws(
 
     async with get_db_context() as db:
         user_service = UserService(db)
-        user = await user_service.get_by_id(UUID(user_id))
+        user = await user_service.get_by_id(int(user_id))
 
         if not user.is_active:
             await websocket.close(code=4001, reason="User account is disabled")
             raise AuthenticationError(message="User account is disabled")
 
-        # Eagerly load all columns, then detach from session to avoid
-        # "instance not bound to a Session" errors after the context manager exits
         await db.refresh(user)
         db.expunge(user)
         return user

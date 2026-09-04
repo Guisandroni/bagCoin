@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'apps/server/**'
+      - 'apps/web/**'
       - 'apps/whatsapp-bridge/**'
       - 'apps/telegram-bridge/**'
       - 'docker-compose.prod.yml'

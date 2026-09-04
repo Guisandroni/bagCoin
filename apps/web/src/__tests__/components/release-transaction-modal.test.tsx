@@ -64,9 +64,15 @@ describe("ReleaseTransactionDetailModal", () => {
 
     fireEvent.click(screen.getByText("Editar"))
     expect(screen.getByText("Salvar")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Alimentação/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText("Ver categorias"))
+    expect(screen.getByText("Ocultar categorias")).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Mercado atualizado" } })
     fireEvent.click(screen.getByLabelText("Transação recorrente"))
-    fireEvent.click(screen.getByText("Semanal"))
+    expect(screen.getByText("Será repetida mensalmente.")).toBeInTheDocument()
+    expect(screen.queryByText("Semanal")).not.toBeInTheDocument()
+    expect(screen.queryByText("Anual")).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: /Alimentação/ }))
     fireEvent.change(screen.getByLabelText("Valor"), { target: { value: "300,25" } })
     fireEvent.click(screen.getByLabelText("Data"))
     fireEvent.click(screen.getByRole("button", { name: "8" }))
@@ -82,7 +88,7 @@ describe("ReleaseTransactionDetailModal", () => {
         category_name: "Alimentação",
         transaction_date: "2026-05-08",
         is_recurring: true,
-        recurrence_frequency: "weekly",
+        recurrence_frequency: "monthly",
       })
     })
   })

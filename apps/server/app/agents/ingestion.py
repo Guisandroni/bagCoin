@@ -35,6 +35,103 @@ def _normalize(text: str) -> str:
     return unicodedata.normalize("NFKD", text.lower()).encode("ASCII", "ignore").decode("ASCII")
 
 
+def _looks_like_budget_or_goal_request(msg_norm: str) -> bool:
+    """Detect messages that are clearly about creating a budget or goal, not a transaction."""
+    if not msg_norm:
+        return False
+    has_budget_keyword = any(kw in msg_norm for kw in ("orcamento", "limite"))
+    has_goal_keyword = "meta" in msg_norm and "orcamento" not in msg_norm
+    if not (has_budget_keyword or has_goal_keyword):
+        return False
+    # Must have a numeric value
+    has_value = bool(re.search(r"\d+", msg_norm))
+    if not has_value:
+        return False
+    # Exclude if it looks like a spending report query
+    report_markers = ("quanto", "como estao", "resumo", "relatorio", "saldo")
+    if any(m in msg_norm for m in report_markers):
+        return False
+    return True
+
+
+def _management_intent_from_message(msg_norm: str) -> tuple[str | None, str | None]:
+    """Fast-path explicit budget/goal management commands."""
+    has_budget = "orcamento" in msg_norm or "orcamentos" in msg_norm
+    has_goal = "meta" in msg_norm or "metas" in msg_norm
+    if not has_budget and not has_goal:
+        return None, None
+
+    delete_terms = ("excluir", "deletar", "apagar", "remover")
+    update_terms = ("editar", "alterar", "atualizar", "mudar", "trocar", "aumentar", "diminuir")
+    create_terms = ("criar", "crie", "novo", "nova", "definir", "defina", "adicionar")
+    list_terms = ("consultar", "listar", "mostrar", "ver", "quais", "como estao", "minhas", "meus")
+    contribute_terms = ("guardei", "guardar", "aportei", "depositei", "coloquei", "adicionei")
+
+    if has_budget:
+        if any(term in msg_norm for term in delete_terms):
+            return IntentType.DELETE_BUDGET.value, "manage"
+        if any(term in msg_norm for term in update_terms):
+            return IntentType.UPDATE_BUDGET.value, "manage"
+        if any(term in msg_norm for term in create_terms) or "limite" in msg_norm:
+            return IntentType.CREATE_BUDGET.value, "manage"
+        if any(term in msg_norm for term in list_terms):
+            return IntentType.QUERY_DATA.value, "query"
+
+    if has_goal:
+        if any(term in msg_norm for term in delete_terms):
+            return IntentType.DELETE_GOAL.value, "manage"
+        if any(term in msg_norm for term in update_terms):
+            return IntentType.UPDATE_GOAL.value, "manage"
+        if any(term in msg_norm for term in contribute_terms):
+            return IntentType.CONTRIBUTE_GOAL.value, "manage"
+        if any(term in msg_norm for term in create_terms) or re.search(r"\d+", msg_norm):
+            return IntentType.CREATE_GOAL.value, "manage"
+        if any(term in msg_norm for term in list_terms):
+            return IntentType.QUERY_DATA.value, "query"
+
+    return None, None
+
+
+def _looks_like_report_summary_request(msg_norm: str) -> bool:
+    """Detect broad financial summary requests that should generate a PDF report."""
+    if not msg_norm:
+        return False
+
+    concept_markers = ("o que e", "como funciona", "pra que serve", "para que serve")
+    if any(marker in msg_norm for marker in concept_markers):
+        return False
+
+    specific_query_markers = (
+        "meta",
+        "metas",
+        "orcamento",
+        "orcamentos",
+        "categoria",
+        "categorias",
+        "transacao",
+        "transacoes",
+    )
+    if any(marker in msg_norm for marker in specific_query_markers):
+        return False
+
+    report_markers = (
+        "quanto ja gastei",
+        "quanto gastei",
+        "como estao minhas despesas",
+        "como estao meus gastos",
+        "como estao minhas receitas",
+        "resumo das minhas financas",
+        "resumo financeiro",
+        "resumo do mes",
+        "balanco",
+        "qual meu saldo",
+        "minhas despesas",
+        "meus gastos",
+        "minhas receitas",
+    )
+    return any(marker in msg_norm for marker in report_markers)
+
+
 def _enrich_system_prompt(phone_number: str) -> str:
     from app.agents.prompts.classify_intent import build_classify_prompt
 
@@ -71,6 +168,7 @@ def classify_intent(state: dict[str, Any]) -> dict[str, Any]:
         elif _is_wizard_intent(wizard_type) and wizard_status in ["collecting", "confirming"]:
             intent_map = {
                 "create_budget": IntentType.CREATE_BUDGET.value,
+                "update_budget": IntentType.UPDATE_BUDGET.value,
                 "create_goal": IntentType.CREATE_GOAL.value,
                 "update_goal": IntentType.CONTRIBUTE_GOAL.value,
                 "contribute_goal": IntentType.CONTRIBUTE_GOAL.value,
@@ -99,6 +197,43 @@ def classify_intent(state: dict[str, Any]) -> dict[str, Any]:
         )
         elapsed = (time.time() - start_time) * 1000
         logger.info(f"[classify_intent] Fast-path: just number → chat ({elapsed:.0f}ms)")
+        return state
+
+    # =====================================================================
+    # FAST-PATH 3: explicit budget/goal management commands
+    # =====================================================================
+    management_intent, management_macro = _management_intent_from_message(msg_norm)
+    if management_intent and management_macro:
+        state["intent"] = management_intent
+        state["macro_intent"] = management_macro
+        state["confidence"] = 1.0
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"[classify_intent] Fast-path: budget/goal {management_intent} ({elapsed:.0f}ms)")
+        return state
+
+    # =====================================================================
+    # FAST-PATH 4: "orçamento"/"meta" with value → manage (not register)
+    # =====================================================================
+    if _looks_like_budget_or_goal_request(msg_norm):
+        if "meta" in msg_norm and "orcamento" not in msg_norm:
+            state["intent"] = IntentType.CREATE_GOAL.value
+        else:
+            state["intent"] = IntentType.CREATE_BUDGET.value
+        state["macro_intent"] = "manage"
+        state["confidence"] = 1.0
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"[classify_intent] Fast-path: budget/goal manage ({elapsed:.0f}ms)")
+        return state
+
+    # =====================================================================
+    # FAST-PATH 5: broad financial summary → PDF report
+    # =====================================================================
+    if _looks_like_report_summary_request(msg_norm):
+        state["intent"] = IntentType.GENERATE_REPORT.value
+        state["macro_intent"] = "report"
+        state["confidence"] = 1.0
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"[classify_intent] Fast-path: summary report ({elapsed:.0f}ms)")
         return state
 
     # =====================================================================

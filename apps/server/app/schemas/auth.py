@@ -35,7 +35,7 @@ class EmailVerificationResponse(BaseSchema):
     """Success response for email verification."""
 
     verified: bool = True
-    message: str = "Email verified successfully"
+    message: str = "Email verificado com sucesso."
     access_token: str | None = None
     refresh_token: str | None = None
     token_type: str = "bearer"
@@ -54,3 +54,30 @@ class ResendVerificationResponse(BaseSchema):
     sent: bool = True
     resend_available_in_seconds: int
     expires_in_seconds: int
+
+
+class ForgotPasswordRequest(BaseSchema):
+    """Request a password reset link."""
+
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseSchema):
+    """Generic response that avoids account enumeration."""
+
+    sent: bool = True
+    message: str = "Se o email informado estiver cadastrado, o link de redefinição foi enviado. Confira sua caixa de entrada."
+
+
+class ResetPasswordRequest(BaseSchema):
+    """Reset password using an emailed token."""
+
+    token: str = Field(min_length=20, max_length=512)
+    password: str = Field(min_length=6, max_length=128)
+
+
+class ResetPasswordResponse(BaseSchema):
+    """Password reset success response."""
+
+    reset: bool = True
+    message: str = "Senha alterada com sucesso. Faça login para continuar."

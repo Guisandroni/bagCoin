@@ -79,6 +79,28 @@ const mockCategories: ReleaseCategory[] = [
   },
 ]
 
+function expectCurrencyVisible(value: string) {
+  expect(
+    screen.getAllByText((content) => content.replace(/\u00a0/g, " ") === value).length
+  ).toBeGreaterThan(0)
+}
+
+function todayIso() {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, "0")
+  const day = String(today.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+function todayFullDate() {
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date())
+}
+
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() },
 }))
@@ -132,6 +154,7 @@ describe("TransacoesClient", () => {
     fireEvent.click(screen.getByText("Adicionar Transação"))
     expect(screen.getByText("Nova Transação")).toBeInTheDocument()
     expect(screen.getByLabelText("Abrir menu")).toBeInTheDocument()
+    expect(screen.getByText(todayFullDate())).toBeInTheDocument()
   })
 
   it("cria transação com categoria existente e recorrência", async () => {
@@ -139,19 +162,35 @@ describe("TransacoesClient", () => {
     render(<TransacoesClient transactions={mockItems} categories={mockCategories} />, { wrapper: createWrapper() })
 
     fireEvent.click(screen.getByText("Adicionar Transação"))
-    fireEvent.change(screen.getByLabelText("Descrição"), { target: { value: "Mercado" } })
-    fireEvent.click(screen.getAllByRole("button", { name: /Alimentação/ }).at(-1)!)
-    fireEvent.change(screen.getByLabelText("Valor"), { target: { value: "55,00" } })
-    fireEvent.click(screen.getByLabelText("Transação recorrente"))
-    fireEvent.click(screen.getByText("Semanal"))
-    fireEvent.click(screen.getByRole("button", { name: "Salvar" }))
+    const modal = screen.getByText("Nova Transação").closest("form")!
+    expect(within(modal).queryByRole("button", { name: /Alimentação/ })).not.toBeInTheDocument()
+    fireEvent.click(within(modal).getByText("Ver categorias"))
+    expect(within(modal).getByText("Ocultar categorias")).toBeInTheDocument()
+    fireEvent.click(within(modal).getByText("Ocultar categorias"))
+    expect(within(modal).queryByRole("button", { name: /Alimentação/ })).not.toBeInTheDocument()
+    fireEvent.change(within(modal).getByLabelText("Pesquisar categorias"), { target: { value: "ali" } })
+    expect(within(modal).getByText("Ocultar categorias")).toBeInTheDocument()
+    fireEvent.change(within(modal).getByLabelText("Descrição"), { target: { value: "Mercado" } })
+    fireEvent.click(within(modal).getByRole("button", { name: /Alimentação/ }))
+    expect(within(modal).getByLabelText("Pesquisar categorias")).toHaveValue("Alimentação")
+    expect(within(modal).queryByText("Ocultar categorias")).not.toBeInTheDocument()
+    expect(within(modal).getByText("Ver categorias")).toBeInTheDocument()
+    fireEvent.change(within(modal).getByLabelText("Valor"), { target: { value: "55,00" } })
+    fireEvent.click(within(modal).getByLabelText("Transação recorrente"))
+    expect(within(modal).getByText("Será repetida mensalmente.")).toBeInTheDocument()
+    expect(within(modal).queryByText("Semanal")).not.toBeInTheDocument()
+    fireEvent.click(within(modal).getByLabelText("Data"))
+    expect(screen.getByRole("button", { name: String(new Date().getDate()) })).toHaveClass("bg-[var(--rls-primary-container)]")
+    fireEvent.click(screen.getByLabelText("Fechar calendário"))
+    fireEvent.click(within(modal).getByRole("button", { name: "Salvar" }))
 
     await waitFor(() => {
       expect(api.post).toHaveBeenCalledWith("/bagcoin/transactions", expect.objectContaining({
         category_id: 1,
         category_name: "Alimentação",
+        transaction_date: todayIso(),
         is_recurring: true,
-        recurrence_frequency: "weekly",
+        recurrence_frequency: "monthly",
       }))
     })
   })
@@ -226,26 +265,40 @@ describe("TransactionsView", () => {
     expect(container.querySelector(".rls")).not.toHaveClass("pb-28")
 
     expect(screen.queryByText("Por dia")).not.toBeInTheDocument()
+    expect(screen.getByText("Total Despesas")).toBeInTheDocument()
+    expect(screen.getByText("Total Receitas")).toBeInTheDocument()
+    expectCurrencyVisible("R$ 322,50")
+    expectCurrencyVisible("R$ 8.500,00")
 
     fireEvent.click(screen.getByText("Por semana"))
     expect(screen.getAllByText("Salário").length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText("Uber")).toBeInTheDocument()
     expect(screen.queryByText("Supermercado")).not.toBeInTheDocument()
+    expectCurrencyVisible("R$ 35,00")
+    expectCurrencyVisible("R$ 8.500,00")
 
     fireEvent.click(screen.getByText("Por mês"))
     expect(screen.getAllByText("Salário").length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText("Uber")).toBeInTheDocument()
-    expect(screen.getByText("Supermercado")).toBeInTheDocument()
+    expect(screen.queryByText("Supermercado")).not.toBeInTheDocument()
     expect(screen.getByText("maio de 2026")).toBeInTheDocument()
-    expect(screen.getByText("abril de 2026")).toBeInTheDocument()
+    expect(screen.queryByText("abril de 2026")).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByText("Calendário"))
     expect(screen.getByLabelText("Selecionar mês")).toHaveValue("4")
     expect(screen.getByLabelText("Selecionar ano")).toHaveValue("2026")
+    expect(screen.getByRole("button", { name: "9" })).toHaveClass("bg-[var(--rls-primary-container)]")
+    expect(screen.getAllByText("Salário").length).toBeGreaterThanOrEqual(1)
+    expect(screen.queryByText("Uber")).not.toBeInTheDocument()
+    expectCurrencyVisible("R$ 0,00")
+    expectCurrencyVisible("R$ 8.500,00")
+
     fireEvent.click(screen.getByRole("button", { name: "6" }))
     expect(screen.getByText("Uber")).toBeInTheDocument()
     expect(screen.queryByText("Salário")).not.toBeInTheDocument()
     expect(screen.queryByText("Supermercado")).not.toBeInTheDocument()
+    expectCurrencyVisible("R$ 35,00")
+    expectCurrencyVisible("R$ 0,00")
   })
 
   it("filtra transações por tipo de receita e despesa", () => {
@@ -288,6 +341,7 @@ describe("TransactionsView", () => {
     fireEvent.change(screen.getByPlaceholderText("Buscar transações..."), { target: { value: "salario" } })
 
     expect(screen.getByText("Nenhuma transação encontrada")).toBeInTheDocument()
+    expectCurrencyVisible("R$ 0,00")
   })
 
   it("aciona seleção ao clicar na linha da transação", () => {

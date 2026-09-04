@@ -1,7 +1,6 @@
 """Unit tests for app.agents.multimodal image processing (PR 2)."""
 
 import base64
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -11,7 +10,6 @@ from app.agents.multimodal import (
     process_multimodal,
 )
 from app.agents.multimodal_types import MultimodalResult
-
 
 # =====================================================================
 # _parse_json_object — tolerates fenced / embedded JSON
@@ -62,9 +60,9 @@ def fake_image_media():
 
 
 def test_process_image_structured_when_json_valid(monkeypatch, fake_image_media):
-    """Groq returns JSON → structured populated."""
+    """Gemini returns JSON -> structured populated."""
     monkeypatch.setattr(
-        "app.agents.multimodal._image_groq",
+        "app.agents.multimodal._image_gemini",
         lambda m, b: '{"is_receipt": true, "establishment": "Mercado Extra", '
                      '"total_amount": 87.43, "transaction_date": "2026-04-15", '
                      '"confidence": 0.9, "raw_text": "NUBANK\\nMercado Extra"}',
@@ -74,13 +72,12 @@ def test_process_image_structured_when_json_valid(monkeypatch, fake_image_media)
     assert result.structured is not None
     assert result.structured["is_receipt"] is True
     assert result.structured["total_amount"] == 87.43
-    assert result.provider == "groq_llama4"
+    assert result.provider == "gemini"
     assert result.failure is False
 
 
-def test_process_image_falls_back_to_gemini(monkeypatch, fake_image_media):
-    """Groq fails → Gemini takes over."""
-    monkeypatch.setattr("app.agents.multimodal._image_groq", lambda m, b: None)
+def test_process_image_uses_gemini(monkeypatch, fake_image_media):
+    """Image extraction uses Gemini directly."""
     monkeypatch.setattr(
         "app.agents.multimodal._image_gemini",
         lambda m, b: '{"is_receipt": true, "establishment": "Farmácia X", '
@@ -91,8 +88,7 @@ def test_process_image_falls_back_to_gemini(monkeypatch, fake_image_media):
     assert result.structured["establishment"] == "Farmácia X"
 
 
-def test_process_image_failure_when_both_fail(monkeypatch, fake_image_media):
-    monkeypatch.setattr("app.agents.multimodal._image_groq", lambda m, b: None)
+def test_process_image_failure_when_gemini_fails(monkeypatch, fake_image_media):
     monkeypatch.setattr("app.agents.multimodal._image_gemini", lambda m, b: None)
     result = process_image(fake_image_media)
     assert result.is_failure
@@ -103,7 +99,7 @@ def test_process_image_plain_text_when_not_json(monkeypatch, fake_image_media):
     """If LLM returns prose without JSON, structured is None and text is preserved."""
     monkeypatch.setattr("app.agents.multimodal.settings.IMAGE_STRUCTURED_EXTRACT", True)
     monkeypatch.setattr(
-        "app.agents.multimodal._image_groq",
+        "app.agents.multimodal._image_gemini",
         lambda m, b: "Esta é uma imagem de um gato fofo",
     )
     result = process_image(fake_image_media)
@@ -144,9 +140,8 @@ def test_process_multimodal_sets_image_structured_in_context(monkeypatch, fake_i
     assert result["context"]["media_provider"] == "groq_llama4"
 
 
-def test_process_multimodal_rejects_non_receipt_image(monkeypatch, fake_image_media):
-    """Non-receipt image should set a response asking for proper input."""
-    monkeypatch.setattr("app.agents.multimodal.settings.USE_TOOL_AGENTS", False)
+def test_process_multimodal_preserves_non_receipt_image_for_document_agent(monkeypatch, fake_image_media):
+    """Non-receipt images continue through the tool-agent document path."""
     monkeypatch.setattr(
         "app.agents.multimodal.process_image",
         lambda m: MultimodalResult(
@@ -157,8 +152,9 @@ def test_process_multimodal_rejects_non_receipt_image(monkeypatch, fake_image_me
     )
     state = _state_with_image(fake_image_media)
     result = process_multimodal(state)
-    assert "não parece um comprovante" in result["response"].lower() or \
-           "não é um comprovante" in result["response"].lower()
+    assert result["context"]["image_structured"]["is_receipt"] is False
+    assert result["context"]["original_format"] == "image"
+    assert result["response"] is None
 
 
 def test_process_multimodal_image_failure_sets_error(monkeypatch, fake_image_media):

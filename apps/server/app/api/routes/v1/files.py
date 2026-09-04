@@ -25,7 +25,11 @@ async def upload_file(
 ) -> Any:
     """Upload a file for use in chat."""
     data = await file.read()
-    is_valid, error = file_upload_svc.validate_upload(file.content_type, len(data))
+    is_valid, error = file_upload_svc.validate_upload(
+        file.content_type,
+        len(data),
+        file.filename,
+    )
     if not is_valid:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 

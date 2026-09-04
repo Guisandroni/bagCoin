@@ -17,7 +17,6 @@ from app.core.config import settings
 from app.core.logfire_setup import instrument_app, setup_logfire
 from app.core.logging import setup_logging
 from app.core.middleware import RequestIDMiddleware, SecurityHeadersMiddleware
-from app.core.csrf import CSRFMiddleware
 
 
 class LifespanState(TypedDict, total=False):
@@ -99,7 +98,7 @@ SHOW_DOCS_ENVIRONMENTS = ("local", "staging", "development")
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     # Only show docs in allowed environments (hide in production)
-    show_docs = settings.ENVIRONMENT in SHOW_DOCS_ENVIRONMENTS
+    show_docs = settings.ENVIRONMENT in SHOW_DOCS_ENVIRONMENTS or settings.ENABLE_API_DOCS
     openapi_url = f"{settings.API_V1_STR}/openapi.json" if show_docs else None
     docs_url = "/docs" if show_docs else None
     redoc_url = "/redoc" if show_docs else None
@@ -214,6 +213,10 @@ A FastAPI project
 
     # Pagination
     add_pagination(app)
+
+    from app.admin import setup_admin
+
+    setup_admin(app)
 
     return app
 
