@@ -37,16 +37,19 @@ MEDIA_FAILURE_PREFIXES = (
     "[Formato de mídia não reconhecido",
 )
 
-WHISPER_HALLUCINATIONS = frozenset({
-    "obrigado por assistir",
-    "obrigada por assistir",
-    "legendas pela comunidade",
-    "transcrição e legendas",
-    "inscreva-se no canal",
-})
+WHISPER_HALLUCINATIONS = frozenset(
+    {
+        "obrigado por assistir",
+        "obrigada por assistir",
+        "legendas pela comunidade",
+        "transcrição e legendas",
+        "inscreva-se no canal",
+    }
+)
 
 
 # ── Clients ────────────────────────────────────────────────
+
 
 def _configured_api_key(value: str | None) -> str | None:
     key = (value or "").strip()
@@ -67,6 +70,7 @@ def _get_groq_client() -> Groq | None:
 
 # ── Audio ──────────────────────────────────────────────────
 
+
 def process_audio(media: dict[str, Any]) -> MultimodalResult:
     """Transcreve audio usando Groq Whisper.
 
@@ -86,8 +90,11 @@ def process_audio(media: dict[str, Any]) -> MultimodalResult:
         mimetype = media.get("mimetype", "audio/ogg")
 
         ext_map = {
-            "audio/ogg": ".ogg", "audio/mpeg": ".mp3", "audio/mp4": ".m4a",
-            "audio/wav": ".wav", "audio/webm": ".webm",
+            "audio/ogg": ".ogg",
+            "audio/mpeg": ".mp3",
+            "audio/mp4": ".m4a",
+            "audio/wav": ".wav",
+            "audio/webm": ".webm",
         }
         ext = ext_map.get(mimetype, ".ogg")
 
@@ -134,7 +141,9 @@ def process_audio(media: dict[str, Any]) -> MultimodalResult:
         )
 
 
-def _audio_confidence(text: str, duration: float | None) -> tuple[Literal["normal", "low"], str | None]:
+def _audio_confidence(
+    text: str, duration: float | None
+) -> tuple[Literal["normal", "low"], str | None]:
     """Classify transcription confidence using simple deterministic guards."""
     text_clean = (text or "").strip()
     if len(text_clean) < 3:
@@ -155,6 +164,7 @@ def _audio_confidence(text: str, duration: float | None) -> tuple[Literal["norma
 
 
 # ── Image ──────────────────────────────────────────────────
+
 
 def _image_gemini(mimetype: str, b64_data: str) -> str | None:
     """Analise de imagem via Gemini 2.5 Flash-Lite (Google Gen AI SDK)."""
@@ -335,7 +345,9 @@ def _image_result_from_text(text: str, provider: str) -> MultimodalResult:
         raw_text = str(structured.get("raw_text") or "").strip()
         establishment = str(structured.get("establishment") or "").strip()
         total = structured.get("total_amount")
-        text_parts = [part for part in [establishment, f"R$ {total}" if total else "", raw_text] if part]
+        text_parts = [
+            part for part in [establishment, f"R$ {total}" if total else "", raw_text] if part
+        ]
         result_text = "\n".join(text_parts) or raw_text or text
         logger.info(
             "[image_receipt] structured=True establishment=%s raw_text_len=%s",
@@ -399,6 +411,7 @@ def process_image(media: dict[str, Any]) -> MultimodalResult:
 
 # ── Document ───────────────────────────────────────────────
 
+
 def _is_docx_media(mimetype: str, filename: str) -> bool:
     return (
         "wordprocessingml.document" in mimetype
@@ -426,14 +439,18 @@ def process_document(media: dict[str, Any]) -> MultimodalResult:
             return MultimodalResult(text=text, provider="document_text")
         except Exception as e:
             logger.error(f"Erro ao decodificar texto: {e}")
-            return MultimodalResult(text="", provider="document_text", failure=True, reason="text_decode_error")
+            return MultimodalResult(
+                text="", provider="document_text", failure=True, reason="text_decode_error"
+            )
 
     # PDF
     if mimetype == "application/pdf":
         try:
             import PyPDF2
         except ImportError:
-            return MultimodalResult(text="", provider="pdf", failure=True, reason="pdf_library_missing")
+            return MultimodalResult(
+                text="", provider="pdf", failure=True, reason="pdf_library_missing"
+            )
 
         try:
             pdf_file = io.BytesIO(doc_data)
@@ -464,10 +481,13 @@ def process_document(media: dict[str, Any]) -> MultimodalResult:
         logger.info(f"DOCX extraído: {len(text)} chars")
         return MultimodalResult(text=text, provider="docx")
 
-    return MultimodalResult(text="", provider="document", failure=True, reason="unsupported_document")
+    return MultimodalResult(
+        text="", provider="document", failure=True, reason="unsupported_document"
+    )
 
 
 # ── Entry Point ────────────────────────────────────────────
+
 
 def process_multimodal(state: dict[str, Any]) -> dict[str, Any]:
     """Processa mídia (áudio, imagem, documento) e extrai texto."""
@@ -528,7 +548,9 @@ def _coerce_result(result: MultimodalResult | str, source_format: str) -> Multim
         return result
     text = str(result)
     if text.startswith(MEDIA_FAILURE_PREFIXES):
-        return MultimodalResult(text="", provider=source_format, failure=True, reason=text.strip("[]"))
+        return MultimodalResult(
+            text="", provider=source_format, failure=True, reason=text.strip("[]")
+        )
     return MultimodalResult(text=text, provider=source_format)
 
 
@@ -560,10 +582,22 @@ def _source_format_from_media(source_format: str, media: dict[str, Any]) -> str:
     if filename:
         ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
         ext_map = {
-            "ogg": "audio", "mp3": "audio", "m4a": "audio", "wav": "audio", "webm": "audio",
-            "jpg": "image", "jpeg": "image", "png": "image", "webp": "image", "gif": "image",
-            "pdf": "document", "csv": "document", "txt": "document", "ofx": "document",
-            "docx": "document", "doc": "document",
+            "ogg": "audio",
+            "mp3": "audio",
+            "m4a": "audio",
+            "wav": "audio",
+            "webm": "audio",
+            "jpg": "image",
+            "jpeg": "image",
+            "png": "image",
+            "webp": "image",
+            "gif": "image",
+            "pdf": "document",
+            "csv": "document",
+            "txt": "document",
+            "ofx": "document",
+            "docx": "document",
+            "doc": "document",
         }
         if ext in ext_map:
             return ext_map[ext]
@@ -597,9 +631,7 @@ def _maybe_resize_image(data: bytes, mimetype: str) -> tuple[bytes, str]:
         buf = BytesIO()
         img.save(buf, format="JPEG", quality=85, optimize=True)
         new_data = buf.getvalue()
-        logger.info(
-            f"Image resized: {len(data)} → {len(new_data)} bytes ({mimetype} → image/jpeg)"
-        )
+        logger.info(f"Image resized: {len(data)} → {len(new_data)} bytes ({mimetype} → image/jpeg)")
         return new_data, "image/jpeg"
     except Exception as exc:
         logger.warning(f"Image resize failed, using original: {exc}")

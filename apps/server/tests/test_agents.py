@@ -15,7 +15,15 @@ from app.services.deduplication_service import is_duplicate
 class MockTransaction:
     """Minimal mock for SQLAlchemy Transaction model."""
 
-    def __init__(self, id=1, amount=0.0, description="", transaction_date=None, type="EXPENSE", category_name=""):
+    def __init__(
+        self,
+        id=1,
+        amount=0.0,
+        description="",
+        transaction_date=None,
+        type="EXPENSE",
+        category_name="",
+    ):
         self.id = id
         self.amount = amount
         self.description = description
@@ -35,9 +43,7 @@ class TestDeduplicationService:
     @patch("app.services.deduplication_service.get_user_transactions")
     def test_is_duplicate_exact_match(self, mock_get_tx):
         """Same amount + same description = dedup."""
-        mock_get_tx.return_value = [
-            MockTransaction(id=1, amount=50.0, description="Mercado")
-        ]
+        mock_get_tx.return_value = [MockTransaction(id=1, amount=50.0, description="Mercado")]
         assert is_duplicate("5511999999999", 50.0, "Mercado") is True
 
     @patch("app.services.deduplication_service.get_user_transactions")
@@ -65,9 +71,7 @@ class TestDeduplicationService:
     @patch("app.services.deduplication_service.get_user_transactions")
     def test_is_duplicate_wrong_amount(self, mock_get_tx):
         """Different amount = no dedup."""
-        mock_get_tx.return_value = [
-            MockTransaction(id=1, amount=50.0, description="Mercado")
-        ]
+        mock_get_tx.return_value = [MockTransaction(id=1, amount=50.0, description="Mercado")]
         assert is_duplicate("5511999999999", 30.0, "Mercado") is False
 
     @patch("app.services.deduplication_service.get_user_transactions")

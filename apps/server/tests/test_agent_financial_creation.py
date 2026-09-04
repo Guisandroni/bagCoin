@@ -59,7 +59,9 @@ def _patch_agent_db(monkeypatch):
     monkeypatch.setattr(import_statement, "sync_session_maker", factory)
     monkeypatch.setattr(budget_service, "sync_session_maker", factory)
     monkeypatch.setattr("app.services.deduplication_service.is_duplicate", lambda *_, **__: False)
-    monkeypatch.setattr("app.services.pattern_learning_service.learn_from_transaction", lambda *_, **__: None)
+    monkeypatch.setattr(
+        "app.services.pattern_learning_service.learn_from_transaction", lambda *_, **__: None
+    )
     return factory
 
 
@@ -187,7 +189,7 @@ def test_agent_budget_links_unified_user_id(monkeypatch):
             email="linked-budget@bagcoin.com",
             hashed_password="x",
             full_name="Linked",
-        phone_number="5511999999999",
+            phone_number="5511999999999",
         )
         db.add(web_user)
         db.commit()
@@ -337,9 +339,7 @@ def test_tool_transaction_correction_updates_pending_confirmation(monkeypatch):
 
     correction = handle_pending_confirmation("5511999999999", "valor era 200")
 
-    assert correction.startswith(
-        "🧾 Despesa: R$ 200,00 em Alimentação (Supermercado) no dia "
-    )
+    assert correction.startswith("🧾 Despesa: R$ 200,00 em Alimentação (Supermercado) no dia ")
     assert correction.endswith(
         "\n\nConfirma esta transação?\n"
         'Se algo estiver errado, me diga o ajuste. Ex: "valor era 200".'
@@ -491,7 +491,7 @@ def test_agent_goal_links_unified_user_id(monkeypatch):
             email="linked-goal@bagcoin.com",
             hashed_password="x",
             full_name="Linked",
-        phone_number="5511999999999",
+            phone_number="5511999999999",
         )
         db.add(web_user)
         db.commit()
@@ -665,18 +665,21 @@ def test_tool_agent_is_the_only_execution_policy():
     from app.core.config import settings
 
     assert not hasattr(settings, "USE_TOOL_AGENTS")
-    assert route_by_intent(
-        cast(
-            AgentState,
-            {
-                "message": "gastei 20 no mercado",
-                "intent": "register_expense",
-                "macro_intent": "register",
-                "error": None,
-                "response": None,
-            },
+    assert (
+        route_by_intent(
+            cast(
+                AgentState,
+                {
+                    "message": "gastei 20 no mercado",
+                    "intent": "register_expense",
+                    "macro_intent": "register",
+                    "error": None,
+                    "response": None,
+                },
+            )
         )
-    ) == "register_agent"
+        == "register_agent"
+    )
 
 
 def test_graph_has_no_direct_transaction_nodes():
@@ -728,17 +731,19 @@ def test_agent_category_aliases_do_not_explode_categories(monkeypatch):
         ("INCOME", "freela", "Freela"),
     ]
     for tx_type, category, description in inputs:
-        save_transaction({
-            "phone_number": "5511999999999",
-            "source_format": "text",
-            "extracted_data": {
-                "type": tx_type,
-                "amount": 10.0,
-                "category": category,
-                "description": description,
-                "confidence": 0.9,
-            },
-        })
+        save_transaction(
+            {
+                "phone_number": "5511999999999",
+                "source_format": "text",
+                "extracted_data": {
+                    "type": tx_type,
+                    "amount": 10.0,
+                    "category": category,
+                    "description": description,
+                    "confidence": 0.9,
+                },
+            }
+        )
 
     with factory() as db:
         names = {category.name for category in db.query(Category).all()}

@@ -8,60 +8,60 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 TRAEFIK_USERSFILE="${TRAEFIK_USERSFILE:-deploy/traefik/usersfile}"
 
 log() {
-  printf '\n[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+	printf '\n[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
 }
 
 fail() {
-  printf '\n[deploy:error] %s\n' "$*" >&2
-  exit 1
+	printf '\n[deploy:error] %s\n' "$*" >&2
+	exit 1
 }
 
 compose() {
-  if docker compose version >/dev/null 2>&1; then
-    docker compose "$@"
-    return
-  fi
+	if docker compose version >/dev/null 2>&1; then
+		docker compose "$@"
+		return
+	fi
 
-  if command -v docker-compose >/dev/null 2>&1; then
-    docker-compose "$@"
-    return
-  fi
+	if command -v docker-compose >/dev/null 2>&1; then
+		docker-compose "$@"
+		return
+	fi
 
-  fail "Docker Compose não encontrado. Instale 'docker compose' ou 'docker-compose'."
+	fail "Docker Compose não encontrado. Instale 'docker compose' ou 'docker-compose'."
 }
 
 read_env_value() {
-  local key="$1"
-  local file="$2"
-  local line value
+	local key="$1"
+	local file="$2"
+	local line value
 
-  line="$(grep -E "^[[:space:]]*${key}=" "$file" | tail -n 1 || true)"
-  value="${line#*=}"
-  value="${value%$'\r'}"
+	line="$(grep -E "^[[:space:]]*${key}=" "$file" | tail -n 1 || true)"
+	value="${line#*=}"
+	value="${value%$'\r'}"
 
-  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
-    value="${value:1:${#value}-2}"
-  elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
-    value="${value:1:${#value}-2}"
-  fi
+	if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+		value="${value:1:${#value}-2}"
+	elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+		value="${value:1:${#value}-2}"
+	fi
 
-  printf '%s' "$value"
+	printf '%s' "$value"
 }
 
 ensure_traefik_usersfile() {
-  local auth_value
+	local auth_value
 
-  if [[ -s "$TRAEFIK_USERSFILE" ]]; then
-    chmod 600 "$TRAEFIK_USERSFILE"
-    return
-  fi
+	if [[ -s "$TRAEFIK_USERSFILE" ]]; then
+		chmod 600 "$TRAEFIK_USERSFILE"
+		return
+	fi
 
-  auth_value="$(read_env_value "TRAEFIK_DASHBOARD_AUTH" "$ENV_FILE")"
-  [[ -n "$auth_value" ]] || fail "Crie $TRAEFIK_USERSFILE ou defina TRAEFIK_DASHBOARD_AUTH em $ENV_FILE."
+	auth_value="$(read_env_value "TRAEFIK_DASHBOARD_AUTH" "$ENV_FILE")"
+	[[ -n "$auth_value" ]] || fail "Crie $TRAEFIK_USERSFILE ou defina TRAEFIK_DASHBOARD_AUTH em $ENV_FILE."
 
-  mkdir -p "$(dirname "$TRAEFIK_USERSFILE")"
-  printf '%s\n' "${auth_value//\$\$/\$}" > "$TRAEFIK_USERSFILE"
-  chmod 600 "$TRAEFIK_USERSFILE"
+	mkdir -p "$(dirname "$TRAEFIK_USERSFILE")"
+	printf '%s\n' "${auth_value//\$\$/\$}" >"$TRAEFIK_USERSFILE"
+	chmod 600 "$TRAEFIK_USERSFILE"
 }
 
 cd "$DEPLOY_PATH" || fail "Não foi possível acessar DEPLOY_PATH=$DEPLOY_PATH."
@@ -70,12 +70,12 @@ cd "$DEPLOY_PATH" || fail "Não foi possível acessar DEPLOY_PATH=$DEPLOY_PATH."
 [[ -f "$COMPOSE_FILE" ]] || fail "Arquivo compose de produção não encontrado: $COMPOSE_FILE."
 
 if [[ "${DEPLOY_SKIP_GIT:-0}" != "1" ]]; then
-  log "Atualizando branch $DEPLOY_BRANCH"
-  git fetch origin "$DEPLOY_BRANCH"
-  git checkout "$DEPLOY_BRANCH"
-  git pull --ff-only origin "$DEPLOY_BRANCH"
+	log "Atualizando branch $DEPLOY_BRANCH"
+	git fetch origin "$DEPLOY_BRANCH"
+	git checkout "$DEPLOY_BRANCH"
+	git pull --ff-only origin "$DEPLOY_BRANCH"
 else
-  log "DEPLOY_SKIP_GIT=1 ativo; pulando atualização Git"
+	log "DEPLOY_SKIP_GIT=1 ativo; pulando atualização Git"
 fi
 
 log "Preparando autenticação do dashboard Traefik"

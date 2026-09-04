@@ -25,9 +25,7 @@ def process_multimodal_node(state: AgentState) -> AgentState:
 
     ctx = state.get("context") or {}
     integration_channel: str = ctx.get("channel") or (
-        "telegram"
-        if str(state.get("phone_number", "")).startswith("telegram:")
-        else "whatsapp"
+        "telegram" if str(state.get("phone_number", "")).startswith("telegram:") else "whatsapp"
     )
     if integration_channel not in ("whatsapp", "telegram"):
         integration_channel = "whatsapp"

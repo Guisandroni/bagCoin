@@ -2,6 +2,7 @@
 
 All tests here run without real DB or LLM — everything is mocked.
 """
+
 import uuid
 from unittest.mock import MagicMock
 
@@ -49,7 +50,7 @@ def mock_list_categories(monkeypatch):
             {"name": "Saúde", "is_default": True},
             {"name": "Lazer", "is_default": True},
         ]
-        for name in (extra or []):
+        for name in extra or []:
             cats.append({"name": name, "is_default": False})
 
         import app.agents.persistence as persistence_module

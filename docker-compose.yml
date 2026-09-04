@@ -1,4 +1,3 @@
-
 # Backend development configuration
 # Usage: docker-compose up -d
 
@@ -10,7 +9,7 @@ services:
     image: bagcoin_api_backend:dev
     container_name: bagcoin_api_backend
     ports:
-      - "8000:8000"
+      - "7000:7000"
     volumes:
       - ./apps/server/app:/app/app:ro
       - ./apps/server/alembic:/app/alembic:ro
@@ -37,16 +36,9 @@ services:
       - API_KEY=${API_KEY:-bagcoin_webhook_secret_123}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
-      - EMAIL_PROVIDER=${EMAIL_PROVIDER:-smtp}
-      - SMTP_HOST=${SMTP_HOST:-mailpit}
-      - SMTP_PORT=${SMTP_PORT:-1025}
-      - SMTP_USER=${SMTP_USER:-}
-      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
-      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-noreply@bagcoin.local}
-      - SMTP_USE_TLS=${SMTP_USE_TLS:-false}
-      - RESEND_API_KEY=${RESEND_API_KEY:-}
-      - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL:-}
-      - RESEND_API_BASE_URL=${RESEND_API_BASE_URL:-https://api.resend.com}
+      # Email settings come from apps/server/.env (loaded by env_file above).
+      # For local Resend tests set EMAIL_PROVIDER=resend_api plus
+      # RESEND_API_KEY and RESEND_FROM_EMAIL in that ignored file.
       - SUPPORT_EMAIL=${SUPPORT_EMAIL:-}
       - EMAIL_VERIFICATION_TTL_SECONDS=${EMAIL_VERIFICATION_TTL_SECONDS:-600}
       - EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS=${EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS:-60}
@@ -62,10 +54,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      mailpit:
-        condition: service_started
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/api/v1/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import httpx; httpx.get('http://localhost:8000/api/v1/health')",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -146,7 +142,11 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "celery -A app.worker.celery_app inspect ping -d celery@$$HOSTNAME 2>&1 | grep -q OK || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "celery -A app.worker.celery_app inspect ping -d celery@$$HOSTNAME 2>&1 | grep -q OK || exit 1",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -175,7 +175,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "celery -A app.worker.celery_app status 2>&1 | grep -q 'OK' || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "celery -A app.worker.celery_app status 2>&1 | grep -q 'OK' || exit 1",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -204,7 +208,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:5555/')\" || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import httpx; httpx.get(''http://localhost:5555/'')" || exit 1',
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
