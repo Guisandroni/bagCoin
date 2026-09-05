@@ -7,15 +7,17 @@ const API_BASE = "http://localhost:8000/api/v1"
 const mockTransactions = [
   {
     id: "1",
+    type: "EXPENSE",
     name: "Supermercado Pão de Açúcar",
     category: "Alimentação",
-    amount: -287.5,
+    amount: 287.5,
     date: "30 Abr",
     source: "manual",
     status: "confirmed",
   },
   {
     id: "2",
+    type: "INCOME",
     name: "Salário — Empresa X",
     category: "Salário",
     amount: 8500,
@@ -50,9 +52,10 @@ export const handlers = [
     return HttpResponse.json(
       {
         id: "99",
+        type: "EXPENSE",
         name: "Novo lançamento",
         category: "Lazer",
-        amount: -50,
+        amount: 50,
         date: "01 Mai",
         source: "manual",
         status: "confirmed",
@@ -79,6 +82,7 @@ export const handlers = [
       email: "ana@email.com",
       full_name: "Ana Silva",
       is_active: true,
+      email_verified: true,
       role: "user",
     })
   }),

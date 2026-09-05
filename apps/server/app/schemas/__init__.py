@@ -2,6 +2,13 @@
 # ruff: noqa: I001, RUF022 - Imports structured for Jinja2 template conditionals
 
 from app.schemas.token import Token, TokenPayload
+from app.schemas.auth import (
+    AuthPendingResponse,
+    EmailVerificationRequest,
+    EmailVerificationResponse,
+    ResendVerificationRequest,
+    ResendVerificationResponse,
+)
 from app.schemas.user import UserCreate, UserRead, UserUpdate
 
 from app.schemas.conversation import (
@@ -34,6 +41,11 @@ __all__ = [
     "UserUpdate",
     "Token",
     "TokenPayload",
+    "AuthPendingResponse",
+    "EmailVerificationRequest",
+    "EmailVerificationResponse",
+    "ResendVerificationRequest",
+    "ResendVerificationResponse",
     "ConversationCreate",
     "ConversationRead",
     "ConversationUpdate",

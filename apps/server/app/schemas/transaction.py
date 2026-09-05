@@ -58,12 +58,15 @@ class TransactionRestCreate(BaseSchema):
     amount: float = Field(gt=0, description="Transaction amount (positive)")
     description: str = Field(min_length=1, max_length=500)
     category_name: str | None = Field(default=None, max_length=100)
+    category_id: int | None = None
     transaction_date: str | None = Field(
         default=None,
         description="ISO date string (e.g. '2026-04-30')",
     )
     source: Literal["manual", "auto"] = "manual"
     status: Literal["confirmed", "pending"] = "confirmed"
+    is_recurring: bool = False
+    recurrence_frequency: Literal["weekly", "monthly", "yearly"] | None = None
 
 
 class TransactionRestUpdate(BaseSchema):
@@ -72,21 +75,30 @@ class TransactionRestUpdate(BaseSchema):
     type: Literal["EXPENSE", "INCOME"] | None = None
     amount: float | None = Field(default=None, gt=0)
     description: str | None = Field(default=None, min_length=1, max_length=500)
+    category_id: int | None = None
     category_name: str | None = Field(default=None, max_length=100)
     transaction_date: str | None = None
     status: Literal["confirmed", "pending"] | None = None
+    is_recurring: bool | None = None
+    recurrence_frequency: Literal["weekly", "monthly", "yearly"] | None = None
 
 
 class TransactionRestResponse(BaseSchema, TimestampSchema):
     """Transaction response schema matching frontend types."""
 
     id: str  # stringified ID for frontend compatibility
+    type: Literal["EXPENSE", "INCOME"]
     name: str
     category: str
+    category_id: int | None = None
+    category_name: str | None = None
     amount: float
     date: str
+    transaction_date: str | None = None
     source: str
     status: str
+    is_recurring: bool = False
+    recurrence_frequency: Literal["weekly", "monthly", "yearly"] | None = None
 
 
 class TransactionListResponse(BaseSchema):

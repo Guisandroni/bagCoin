@@ -66,6 +66,24 @@ class RedisClient:
             raise RuntimeError("Redis client not connected")
         return bool(await self.client.exists(key))
 
+    async def incr(self, key: str) -> int:
+        """Increment a counter and return the new value."""
+        if not self.client:
+            raise RuntimeError("Redis client not connected")
+        return int(await self.client.incr(key))
+
+    async def expire(self, key: str, ttl: int) -> bool:
+        """Set a TTL in seconds for an existing key."""
+        if not self.client:
+            raise RuntimeError("Redis client not connected")
+        return bool(await self.client.expire(key, ttl))
+
+    async def ttl(self, key: str) -> int:
+        """Return remaining TTL in seconds."""
+        if not self.client:
+            raise RuntimeError("Redis client not connected")
+        return int(await self.client.ttl(key))
+
     async def ping(self) -> bool:
         """Ping Redis server. Returns True if connected."""
         if not self.client:

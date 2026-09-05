@@ -22,11 +22,14 @@ ALLOWED_MIME_TYPES = {
     "text/html",
     "text/css",
     "text/xml",
+    "text/ofx",
     "text/x-python",
     "text/javascript",
     "text/x-yaml",
     "application/json",
+    "application/ofx",
     "application/pdf",
+    "application/x-ofx",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/x-yaml",
 }
@@ -43,6 +46,8 @@ def classify_file(mime_type: str, filename: str) -> str:
     if mime_type == "application/pdf" or filename.lower().endswith(".pdf"):
         return "pdf"
     ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    if ext in {"ofx", "qfx"}:
+        return "text"
     if ext == "docx" or "wordprocessingml" in mime_type:
         return "docx"
     return "text"

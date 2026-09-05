@@ -97,13 +97,17 @@ logs/
 
 # Docker
 .docker/
+deploy/traefik/usersfile
 
 # OS
 .DS_Store
 Thumbs.db
 
 # Project specific
+docs/
 .hermes/
+.claude/
+.opencode/
 
 
 # Node
@@ -131,3 +135,13 @@ build/
 .venv/
 __pycache__/stitch_markdown_design_system*.zip
 *.zip
+fix.md
+plano-design-fix.md
+plano-melhorias.md
+scripts/
+.agents
+.claude
+.opencode
+bugs.md
+.agents/skills/
+.pi-subagents/

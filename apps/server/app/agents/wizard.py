@@ -12,6 +12,7 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from app.agents import responses as resp
 from app.agents.persistence import get_or_create_user
 from app.db.models.phone_conversation import PhoneConversation
 from app.db.session import sync_session_maker
@@ -22,28 +23,15 @@ logger = logging.getLogger(__name__)
 # Schemas de cada wizard (campos obrigatórios)
 WIZARD_SCHEMAS = {
     "create_budget": {
-        "fields": ["budget_type", "name", "total_limit"],
-        "defaults": {"period": "monthly"},
+        "fields": ["name", "total_limit"],
+        "defaults": {"period": "monthly", "budget_type": "category"},
         "labels": {
-            "budget_type": "tipo de orçamento",
-            "name": "nome do orçamento",
+            "name": "categoria do orçamento",
             "total_limit": "valor (em R$)",
         },
-        "options": {
-            "budget_type": {
-                "1": "general",
-                "2": "category",
-            },
-        },
-        "option_labels": {
-            "budget_type": {
-                "1": "Conta/Saldo — para acompanhar quanto dinheiro você tem (ex: conta bancária, cartão de crédito)",
-                "2": "Limite por categoria — para controlar gastos em uma categoria específica (ex: alimentação, lazer)",
-            },
-        },
         "examples": [
-            "1 (Conta/Saldo) — Nubank, 3000",
-            "2 (Categoria) — Alimentação, 800",
+            "Alimentação, 800",
+            "Supermercado 500",
         ],
     },
     "create_goal": {
@@ -56,6 +44,15 @@ WIZARD_SCHEMAS = {
             "deadline": "prazo (opcional, ex: 12/2026)",
         },
         "examples": ["viagem, 10000, 12/2026", "bike 1200", "emergência R$ 5000 até 06/2027"],
+    },
+    "update_budget": {
+        "fields": ["name", "total_limit"],
+        "defaults": {},
+        "labels": {
+            "name": "qual orçamento",
+            "total_limit": "novo limite (em R$)",
+        },
+        "examples": ["Combustível, 200", "Supermercado 800"],
     },
     "update_goal": {
         "fields": ["goal_identifier", "amount"],
@@ -176,7 +173,7 @@ def _clear_wizard_state(phone_number: str):
 
 def _is_wizard_intent(intent: str) -> bool:
     """Verifica se a intenção é gerenciada pelo wizard."""
-    return intent in ["create_budget", "create_goal", "update_goal", "contribute_goal"]
+    return intent in ["create_budget", "create_goal", "update_budget", "update_goal", "contribute_goal"]
 
 
 def _parse_value(value_str: str) -> float | None:
@@ -411,6 +408,10 @@ def _handle_collecting(
     examples = schema["examples"]
     options = schema.get("options", {})
     option_labels = schema.get("option_labels", {})
+    valid_fields = set(fields)
+    wizard["missing"] = [field for field in wizard.get("missing", []) if field in valid_fields]
+    for field, default in schema.get("defaults", {}).items():
+        wizard.setdefault("collected", {}).setdefault(field, default)
 
     # Verifica cancelamento em qualquer fase
     # Só cancela se a mensagem é EXPLICITAMENTE de cancelamento
@@ -454,10 +455,20 @@ def _handle_collecting(
         missing_labels = [labels[f] for f in wizard["missing"]]
         type_name = {
             "create_budget": "orçamento",
+            "update_budget": "atualização de orçamento",
             "create_goal": "meta",
             "update_goal": "atualização de meta",
             "contribute_goal": "contribuição para meta",
         }.get(wizard_type, wizard_type.replace("_", " "))
+        if wizard_type == "create_budget":
+            state["response"] = (
+                "Para criar um orçamento, me envie a categoria e o valor.\n\n"
+                'Ex: "alimentação 4000" ou "orçamento 4000 alimentação".'
+            )
+            wizard["updated_at"] = datetime.now(UTC).isoformat()
+            _save_wizard_state(phone_number, wizard)
+            return state
+
         response = f"Vamos criar seu {type_name}!\n\nPreciso das seguintes informações:\n"
         for i, label in enumerate(missing_labels, 1):
             response += f"{i}. {label}\n"
@@ -502,7 +513,7 @@ def _handle_collecting(
                 return state
             # Todos os campos coletados
             wizard["status"] = "confirming"
-            return _handle_confirming(state, wizard, message, phone_number, llm)
+            return _prompt_for_confirmation(state, wizard, phone_number)
         else:
             # Resposta inválida — re-prompt com a pergunta de opções
             state["response"] = _build_option_prompt(field, field_opt_labels, is_retry=True)
@@ -561,7 +572,23 @@ def _handle_collecting(
 
     # Todos os campos coletados - vai para confirmação
     wizard["status"] = "confirming"
-    return _handle_confirming(state, wizard, message, phone_number, llm)
+    return _prompt_for_confirmation(state, wizard, phone_number)
+
+
+def _prompt_for_confirmation(
+    state: dict[str, Any], wizard: dict[str, Any], phone_number: str
+) -> dict[str, Any]:
+    """Show confirmation without treating the current data message as approval."""
+    summary = _format_confirmation(wizard)
+    if wizard["type"] in {"create_budget", "create_goal", "update_budget", "update_goal", "contribute_goal"}:
+        state["response"] = summary
+    else:
+        state["response"] = (
+            f"{summary}\n\nConfirma?\nResponda 'sim' para criar ou me diga o que quer alterar."
+        )
+    wizard["updated_at"] = datetime.now(UTC).isoformat()
+    _save_wizard_state(phone_number, wizard)
+    return state
 
 
 def _handle_confirming(
@@ -611,9 +638,12 @@ def _handle_confirming(
 
     # Resumo para confirmação
     summary = _format_confirmation(wizard)
-    state["response"] = (
-        f"{summary}\n\nConfirma?\nResponda 'sim' para criar ou me diga o que quer alterar."
-    )
+    if wizard_type in ("create_budget", "update_budget"):
+        state["response"] = summary
+    else:
+        state["response"] = (
+            f"{summary}\n\nConfirma?\nResponda 'sim' para criar ou me diga o que quer alterar."
+        )
     wizard["updated_at"] = datetime.now(UTC).isoformat()
     _save_wizard_state(phone_number, wizard)
     return state
@@ -646,27 +676,40 @@ def _handle_executing(
         if wizard_type == "create_budget":
             from app.services.budget_service import create_budget
 
+            from app.core.financial_categories import resolve_default_category_name
+
             total_limit_value = collected.get("total_limit", 0)
             if not isinstance(total_limit_value, (int, float)):
                 total_limit_value = _parse_value(str(total_limit_value)) or 0
             budget = create_budget(
                 phone_number=phone_number,
-                name=collected.get("name", "Geral"),
+                name=resolve_default_category_name(collected.get("name", "Geral")),
                 total_limit=float(total_limit_value),
                 period=collected.get("period", "monthly"),
-                budget_type=collected.get("budget_type", "category"),
+                budget_type="category",
             )
             state["budget_data"] = budget
-            from app.agents import responses as resp
+            state["response"] = resp.budget_saved_success()
 
-            budget_label = "Conta" if budget.get("budget_type") == "general" else "Orçamento"
-            verb = "criada" if budget_label == "Conta" else "criado"
-            state["response"] = (
-                f"{budget_label} {verb}! 📊\n\n"
-                f"{'Nome' if budget_label == 'Conta' else 'Categoria'}: {budget['name']}\n"
-                f"{'Saldo' if budget_label == 'Conta' else 'Limite'}: R$ {budget['total_limit']:,.2f}\n"
-                f"Período: {budget['period']}"
-            )
+        elif wizard_type == "update_budget":
+            from app.core.financial_categories import resolve_default_category_name
+            from app.services.budget_service import update_budget_limit
+
+            total_limit_value = collected.get("total_limit", 0)
+            if not isinstance(total_limit_value, (int, float)):
+                total_limit_value = _parse_value(str(total_limit_value)) or 0
+            name = resolve_default_category_name(collected.get("name", ""))
+            result = update_budget_limit(phone_number, name, float(total_limit_value))
+            if result:
+                state["budget_data"] = result
+                state["response"] = resp.budget_created(
+                    result["name"],
+                    float(result["total_limit"]),
+                    result["period"],
+                    updated=True,
+                )
+            else:
+                state["response"] = f"Não encontrei o orçamento '{name}'."
 
         elif wizard_type == "create_goal":
             from app.services.budget_service import create_goal
@@ -688,11 +731,7 @@ def _handle_executing(
                 deadline=deadline,
             )
             state["goal_data"] = goal
-            from app.agents import responses as resp
-
-            state["response"] = resp.goal_created(
-                goal["title"], goal["target_amount"], goal.get("deadline")
-            )
+            state["response"] = resp.goal_saved_success()
 
         elif wizard_type in ("update_goal", "contribute_goal"):
             from app.services.budget_service import get_goals, update_goal_progress
@@ -704,12 +743,11 @@ def _handle_executing(
 
             if target_goal and amount:
                 result = update_goal_progress(phone_number, target_goal["id"], amount)
-                action = "atualizada" if wizard_type == "update_goal" else "registrada"
-                state["response"] = (
-                    f"Meta {action}!\n\n"
-                    f"Meta: {result['title']}\n"
-                    f"Adicionado: R$ {amount:,.2f}\n"
-                    f"Progresso: R$ {result['current_amount']:,.2f} / R$ {result['target_amount']:,.2f} ({result['percentage']}%)"
+                state["response"] = resp.goal_contribution_success(
+                    result["title"],
+                    float(result["current_amount"]),
+                    float(result["target_amount"]),
+                    result["percentage"],
                 )
             else:
                 goals_list = "\n".join(
@@ -821,7 +859,12 @@ def _extract_fields_simple(message: str, wizard_type: str, missing_fields: list)
         text_only = text_only.strip(" ,.;:-")
         if text_only and len(text_only) > 1:
             field = "name" if "name" in missing_fields else "title"
-            result[field] = text_only.strip()
+            value = text_only.strip()
+            if field == "name" and wizard_type in {"create_budget", "update_budget"}:
+                from app.core.financial_categories import resolve_default_category_name
+
+                value = resolve_default_category_name(value)
+            result[field] = value
 
     # Tenta extrair period
     if "period" in missing_fields:
@@ -878,32 +921,25 @@ def _format_confirmation(wizard: dict) -> str:
         name = collected.get("name", "")
         limit = collected.get("total_limit", 0)
         period = collected.get("period", "monthly")
-        budget_type = collected.get("budget_type", "category")
-        type_label = "Conta/Saldo" if budget_type == "general" else "Limite por Categoria"
-        value_label = "Saldo" if budget_type == "general" else "Limite"
-        name_label = "Nome" if budget_type == "general" else "Categoria"
-        return (
-            f"Resumo do Orçamento:\n\n"
-            f"Tipo: {type_label}\n"
-            f"{name_label}: {name}\n"
-            f"{value_label}: R$ {float(limit):,.2f}\n"
-            f"Período: {_period_label(period)}"
-        )
+        return resp.budget_confirmation(str(name), float(limit), str(period or "monthly"))
+
+    elif wizard_type == "update_budget":
+        from app.core.financial_categories import resolve_default_category_name
+
+        name = resolve_default_category_name(collected.get("name", ""))
+        limit = collected.get("total_limit", 0)
+        return f"Vou atualizar o orçamento {name} para R$ {float(limit):,.2f}.\n\nConfirma?"
 
     elif wizard_type == "create_goal":
         title = collected.get("title", "")
         target = collected.get("target_amount", 0)
         deadline = collected.get("deadline", "")
-        deadline_text = f"\nPrazo: {deadline}" if deadline else ""
-        return (
-            f"Resumo da Meta:\n\nObjetivo: {title}\nValor: R$ {float(target):,.2f}{deadline_text}"
-        )
+        return resp.goal_confirmation(str(title), float(target), deadline)
 
     elif wizard_type in ("update_goal", "contribute_goal"):
         identifier = collected.get("goal_identifier", "")
         amount = collected.get("amount", 0)
-        label = "Atualizar Meta" if wizard_type == "update_goal" else "Contribuir para Meta"
-        return f"{label}:\n\nMeta: {identifier}\nAdicionar: R$ {float(amount):,.2f}"
+        return resp.goal_contribution_confirmation(str(identifier), float(amount))
 
     return ""
 

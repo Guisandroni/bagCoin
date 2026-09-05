@@ -26,14 +26,20 @@ class MockUser:
         email="test@example.com",
         full_name="Test User",
         is_active=True,
+        email_verified=True,
         role="user",
     ):
         self.id = id or uuid4()
         self.email = email
         self.full_name = full_name
         self.is_active = is_active
+        self.email_verified = email_verified
+        self.email_verified_at = datetime.now(UTC) if email_verified else None
         self.role = role
         self.hashed_password = "hashed"
+        self.phone_number = None
+        self.avatar_url = None
+        self.auth_provider = "email"
         self.created_at = datetime.now(UTC)
         self.updated_at = datetime.now(UTC)
 

@@ -70,6 +70,7 @@ def _mock_budget_dict(**kwargs) -> dict:
         "percentage": kwargs.get("percentage", 25.0),
         "period": kwargs.get("period", "monthly"),
         "budget_type": kwargs.get("budget_type", "general"),
+        "budget_date": kwargs.get("budget_date", "2026-05-25"),
         "created_at": now.isoformat() if hasattr(now, "isoformat") else now,
         "updated_at": kwargs.get("updated_at", now).isoformat()
         if hasattr(kwargs.get("updated_at", now), "isoformat")
@@ -198,6 +199,7 @@ async def test_create_budget(client_with_auth):
             json={
                 "name": "New Budget",
                 "period": "monthly",
+                "budget_date": "2026-05-25",
                 "total_limit": 500.0,
                 "category_id": 1,
                 "user_id": 1,
@@ -210,6 +212,7 @@ async def test_create_budget(client_with_auth):
     assert data["name"] == "New Budget"
     assert data["total_limit"] == 500.0
     assert data["total_spent"] == 0.0
+    assert data["budget_date"] == "2026-05-25"
 
 
 @pytest.mark.anyio

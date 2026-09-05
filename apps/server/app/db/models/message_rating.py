@@ -1,8 +1,4 @@
-"""Message rating model for user feedback on AI responses.
-
-This module is only imported when JWT auth is enabled (see
-`app/db/models/__init__.py` and `alembic/env.py`).
-"""
+"""Message rating model for user feedback on AI responses."""
 
 import uuid
 from typing import TYPE_CHECKING
@@ -34,23 +30,17 @@ class MessageRating(Base, TimestampMixin):
         nullable=False,
         index=True,
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    user_id: Mapped[int] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    rating: Mapped[int] = mapped_column(Integer, nullable=False)  # 1 or -1
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    message: Mapped["Message"] = relationship(
-        "Message",
-        foreign_keys="MessageRating.message_id",
-    )
-    user: Mapped["User"] = relationship(
-        "User",
-        foreign_keys="MessageRating.user_id",
-    )
+    message: Mapped["Message"] = relationship("Message", foreign_keys="MessageRating.message_id")
+    user: Mapped["User"] = relationship("User", foreign_keys="MessageRating.user_id")
 
     def __repr__(self) -> str:
         return f"<MessageRating(id={self.id}, rating={self.rating})>"

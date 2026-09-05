@@ -50,7 +50,8 @@ export function RecentTransactions() {
                   id: t.id,
                   name: t.name,
                   category: t.category,
-                  amount: t.amount,
+                  type: t.type === "INCOME" ? "receita" : "despesa",
+                  amount: Math.abs(t.amount),
                   date: t.date,
                   source: t.source as "manual" | "auto" | "whatsapp",
                   status: t.status as "confirmed" | "pending",
@@ -75,9 +76,10 @@ export function RecentTransactions() {
                 <p
                   className={cn(
                     "font-heading text-[14px] font-semibold tracking-tight",
-                    t.amount < 0 ? "text-danger" : "text-success"
+                    t.type === "EXPENSE" ? "text-danger" : "text-success"
                   )}
                 >
+                  {t.type === "EXPENSE" ? "-" : "+"}
                   {formatCurrency(t.amount)}
                 </p>
                 {t.status === "pending" && (

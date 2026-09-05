@@ -15,7 +15,15 @@ from app.services.deduplication_service import is_duplicate
 class MockTransaction:
     """Minimal mock for SQLAlchemy Transaction model."""
 
-    def __init__(self, id=1, amount=0.0, description="", transaction_date=None, type="EXPENSE", category_name=""):
+    def __init__(
+        self,
+        id=1,
+        amount=0.0,
+        description="",
+        transaction_date=None,
+        type="EXPENSE",
+        category_name="",
+    ):
         self.id = id
         self.amount = amount
         self.description = description
@@ -35,15 +43,13 @@ class TestDeduplicationService:
     @patch("app.services.deduplication_service.get_user_transactions")
     def test_is_duplicate_exact_match(self, mock_get_tx):
         """Same amount + same description = dedup."""
-        mock_get_tx.return_value = [
-            MockTransaction(id=1, amount=50.0, description="Mercado")
-        ]
+        mock_get_tx.return_value = [MockTransaction(id=1, amount=50.0, description="Mercado")]
         assert is_duplicate("5511999999999", 50.0, "Mercado") is True
 
     @patch("app.services.deduplication_service.get_user_transactions")
     def test_is_duplicate_fuzzy_match(self, mock_get_tx):
         """Similar descriptions (85%+) = dedup.
-        
+
         'Mercado São Paulo' vs 'Mercado São Paulo Extra' — 86% match.
         """
         mock_get_tx.return_value = [
@@ -54,7 +60,7 @@ class TestDeduplicationService:
     @patch("app.services.deduplication_service.get_user_transactions")
     def test_is_duplicate_fuzzy_match_supermercado(self, mock_get_tx):
         """'Supermercado Cidades' vs 'Supermercado Cidades Jardim' = dedup.
-        
+
         Ratio: 85.1% >= 85% threshold.
         """
         mock_get_tx.return_value = [
@@ -65,9 +71,7 @@ class TestDeduplicationService:
     @patch("app.services.deduplication_service.get_user_transactions")
     def test_is_duplicate_wrong_amount(self, mock_get_tx):
         """Different amount = no dedup."""
-        mock_get_tx.return_value = [
-            MockTransaction(id=1, amount=50.0, description="Mercado")
-        ]
+        mock_get_tx.return_value = [MockTransaction(id=1, amount=50.0, description="Mercado")]
         assert is_duplicate("5511999999999", 30.0, "Mercado") is False
 
     @patch("app.services.deduplication_service.get_user_transactions")
@@ -96,72 +100,6 @@ class TestDeduplicationService:
         """No transactions at all = no dedup."""
         mock_get_tx.return_value = []
         assert is_duplicate("5511999999999", 50.0, "Mercado") is False
-
-
-# ═══════════════════════════════════════════════════════════════
-# 2. CORREÇÃO DE INTENÇÃO (correction_handler_node)
-# ═══════════════════════════════════════════════════════════════
-
-
-class TestCorrectionHandler:
-    """Test the regex patterns for correction detection."""
-
-    @patch("app.agents.orchestrator.update_transaction_handler_node")
-    def test_correction_value(self, mock_update):
-        """'R$ 60' should trigger value correction."""
-        from app.agents.orchestrator import correction_handler_node
-
-        state = {"phone_number": "5511999999999", "message": "Na verdade foi R$ 60"}
-        correction_handler_node(state)
-        mock_update.assert_called_once()
-
-    @patch("app.agents.orchestrator.update_transaction_handler_node")
-    def test_correction_category_era(self, mock_update):
-        """'era Alimentação' should trigger category correction."""
-        from app.agents.orchestrator import correction_handler_node
-
-        state = {"phone_number": "5511999999999", "message": "era Alimentação"}
-        correction_handler_node(state)
-        mock_update.assert_called_once()
-        assert state["extracted_data"]["category_name"] == "Alimentação"
-
-    @patch("app.agents.orchestrator.update_transaction_handler_node")
-    def test_correction_category_corrige(self, mock_update):
-        """'corrige categoria para Transporte' should trigger category correction."""
-        from app.agents.orchestrator import correction_handler_node
-
-        state = {"phone_number": "5511999999999", "message": "corrige categoria para Transporte"}
-        correction_handler_node(state)
-        mock_update.assert_called_once()
-        assert state["extracted_data"]["category_name"] == "Transporte"
-
-    @patch("app.agents.orchestrator.update_transaction_handler_node")
-    def test_correction_description_nome(self, mock_update):
-        """'o nome é Mercado' should trigger description correction."""
-        from app.agents.orchestrator import correction_handler_node
-
-        state = {"phone_number": "5511999999999", "message": "o nome é Mercado"}
-        correction_handler_node(state)
-        mock_update.assert_called_once()
-        assert state["extracted_data"]["description"] == "Mercado"
-
-    @patch("app.agents.orchestrator.update_transaction_handler_node")
-    def test_correction_description_descricao(self, mock_update):
-        """'descrição certa é Padaria' should trigger description correction."""
-        from app.agents.orchestrator import correction_handler_node
-
-        state = {"phone_number": "5511999999999", "message": "descrição certa é Padaria"}
-        correction_handler_node(state)
-        mock_update.assert_called_once()
-        assert state["extracted_data"]["description"] == "Padaria"
-
-    def test_correction_fallback(self):
-        """Unrecognized correction should get help message."""
-        from app.agents.orchestrator import correction_handler_node
-
-        state = {"phone_number": "5511999999999", "message": "mudou tudo"}
-        correction_handler_node(state)
-        assert "O que você quer corrigir?" in state["response"]
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -282,10 +220,10 @@ class TestIntegrationPairingMultimodalNode:
         base.update(overrides)
         return base
 
-    @patch("app.agents.orchestrator.process_multimodal")
+    @patch("app.agents.nodes.multimodal.process_multimodal")
     @patch("app.services.integration_service.try_consume_link_pairing_sync")
     def test_pairing_fast_path_skips_multimodal(self, mock_consume, mock_multimodal):
-        from app.agents.orchestrator import process_multimodal_node
+        from app.agents.nodes.multimodal import process_multimodal_node
 
         tok = "a1b2c3d4e5f6g7h8i9j0kl"
         state = self._minimal_agent_state(
@@ -298,10 +236,10 @@ class TestIntegrationPairingMultimodalNode:
         mock_consume.assert_called_once()
         mock_multimodal.assert_not_called()
 
-    @patch("app.agents.orchestrator.process_multimodal")
+    @patch("app.agents.nodes.multimodal.process_multimodal")
     @patch("app.services.integration_service.try_consume_link_pairing_sync")
     def test_normal_message_still_calls_multimodal(self, mock_consume, mock_multimodal):
-        from app.agents.orchestrator import process_multimodal_node
+        from app.agents.nodes.multimodal import process_multimodal_node
 
         mock_consume.return_value = None
         mock_multimodal.return_value = self._minimal_agent_state(

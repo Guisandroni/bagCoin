@@ -1,9 +1,10 @@
 "use client"
 
-import Link from "next/link"
-import { Moon, Sun, Monitor, Bell, Globe, Shield, ChevronRight } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Bell, Globe, Monitor, Moon, Send, Shield, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
+import { AppBar } from "@/components/release/app-bar"
+import { ListItem } from "@/components/release/list-item"
+import { useAppStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
 const appearanceOptions = [
@@ -12,84 +13,75 @@ const appearanceOptions = [
   { value: "system", label: "Sistema", icon: Monitor },
 ] as const
 
-const settingsSections = [
-  {
-    title: "Preferências",
-    items: [
-      { icon: Globe, label: "Idioma", description: "Português (Brasil)", action: "select" },
-      { icon: Bell, label: "Notificações", description: "Alertas de transações e metas", action: "toggle" },
-      { icon: Shield, label: "Privacidade", description: "Dados e permissões", action: "link" },
-    ],
-  },
-  {
-    title: "WhatsApp",
-    items: [
-      { icon: Sun, label: "Conexão ativa", description: "Todos os lançamentos são detectados automaticamente", action: "badge" },
-    ],
-  },
-]
-
 export default function ConfiguracoesPage() {
   const { theme, setTheme } = useTheme()
+  const toggleDrawer = useAppStore((state) => state.toggleDrawer)
 
   return (
-    <div className="page-in space-y-5 pb-28 lg:pb-10">
-      <h1 className="section-title">Configurações</h1>
+    <div className="rls mx-auto min-h-dvh w-full max-w-md bg-[var(--rls-background)] pb-8 shadow-[0_0_48px_rgba(22,82,240,0.08)]">
+      <AppBar title="Configurações" onOpenDrawer={toggleDrawer} />
 
-      <div className="rounded-2xl border border-border bg-card">
-        <Link
-          href="/app/configuracoes/integracoes"
-          className="flex min-h-[56px] items-center gap-3 border-b border-border px-4 py-3 active:bg-muted/60"
-        >
-          <Globe className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-          <div className="min-w-0 flex-1">
-            <p className="text-[15px] font-semibold">Integrações</p>
-            <p className="text-[12px] text-muted-foreground">WhatsApp e Telegram</p>
-          </div>
-          <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-        </Link>
-
-        <div className="px-4 py-3">
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+      <main className="px-[var(--rls-container-margin)] flex flex-col gap-[var(--rls-stack-gap-lg)] pt-[var(--rls-stack-gap-md)]">
+        <section className="rounded-[var(--rls-radius-lg)] bg-[var(--rls-surface-container-lowest)] p-[var(--rls-inline-padding-md)] shadow-sm">
+          <p className="rls-text-label-lg mb-3 text-[var(--rls-on-surface-variant)]">
             Aparência
           </p>
-          <div className="flex gap-2">
-            {appearanceOptions.map((opt) => (
-              <Button
-                key={opt.value}
-                variant={theme === opt.value ? "default" : "secondary"}
-                className={cn("flex-1 gap-2 rounded-full")}
-                onClick={() => setTheme(opt.value)}
+          <div className="grid grid-cols-3 gap-2">
+            {appearanceOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setTheme(option.value)}
+                className={cn(
+                  "flex h-14 items-center justify-center gap-2 rounded-[var(--rls-radius-pill)] text-sm font-semibold transition-colors",
+                  theme === option.value
+                    ? "test-bg-primary bg-[var(--rls-primary-container)] text-white"
+                    : "test-bg-secondary bg-[var(--rls-surface-container)] text-[var(--rls-on-surface-variant)]"
+                )}
               >
-                <opt.icon className="h-4 w-4" />
-                {opt.label}
-              </Button>
+                <option.icon className="h-4 w-4" />
+                {option.label}
+              </button>
             ))}
           </div>
-        </div>
-      </div>
+        </section>
 
-      {settingsSections.map((section) => (
-        <div key={section.title} className="rounded-2xl border border-border bg-card">
-          <p className="border-b border-border px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-            {section.title}
+        <section className="flex flex-col gap-2">
+          <p className="rls-text-label-lg px-1 text-[var(--rls-on-surface-variant)]">
+            Preferências
           </p>
-          {section.items.map((item, i) => (
-            <button
-              key={i}
-              type="button"
-              className="flex w-full min-h-[56px] items-center gap-3 border-b border-border px-4 py-3 text-left transition-colors last:border-b-0 active:bg-muted/60"
-            >
-              <item.icon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-              <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-medium">{item.label}</p>
-                <p className="text-[12px] text-muted-foreground">{item.description}</p>
-              </div>
-              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground opacity-50" aria-hidden />
-            </button>
-          ))}
-        </div>
-      ))}
+          <ListItem
+            icon={<Globe className="h-5 w-5 text-[var(--rls-primary-container)]" />}
+            iconBg="bg-[var(--rls-primary-container)]/10"
+            title="Idioma"
+            description="Português (Brasil)"
+          />
+          <ListItem
+            icon={<Bell className="h-5 w-5 text-[var(--rls-secondary)]" />}
+            iconBg="bg-[var(--rls-secondary-container)]/20"
+            title="Notificações"
+            description="Alertas de transações e metas"
+          />
+          <ListItem
+            icon={<Shield className="h-5 w-5 text-[var(--rls-error)]" />}
+            iconBg="bg-[var(--rls-error-container)]"
+            title="Privacidade"
+            description="Dados e permissões"
+          />
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <p className="rls-text-label-lg px-1 text-[var(--rls-on-surface-variant)]">
+            WhatsApp
+          </p>
+          <ListItem
+            icon={<Send className="h-5 w-5 text-[var(--rls-primary-container)]" />}
+            iconBg="bg-[var(--rls-primary-container)]/10"
+            title="Conexão ativa"
+            description="Todos os lançamentos são detectados automaticamente"
+          />
+        </section>
+      </main>
     </div>
   )
 }

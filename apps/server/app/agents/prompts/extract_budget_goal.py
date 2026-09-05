@@ -9,14 +9,20 @@ EXTRACT_PROMPTS: dict[str, str] = {
 Retorne APENAS JSON: {"name": "categoria", "total_limit": 3000.0, "period": "monthly"}
 - name: a categoria/nome do orçamento (ex: alimentação, transporte)
 - total_limit: valor numérico (número, sem R$)
-- period: "monthly", "weekly", "daily" ou "yearly" (padrão: "monthly")
+- period: sempre "monthly". O BagCoin cria orçamentos por categoria a cada 30 dias.
+- não extraia nem peça descrição para orçamento.
+Exemplos:
+"orçamento 4000 alimentação" -> {"name": "alimentação", "total_limit": 4000.0, "period": "monthly"}
+"alimentação 4000" -> {"name": "alimentação", "total_limit": 4000.0, "period": "monthly"}
 Se um campo não estiver na mensagem, omita do JSON.""",
 
     "goal": """Extraia dados de meta financeira da mensagem.
 Retorne APENAS JSON: {"title": "viagem", "target_amount": 10000.0, "deadline": "12/2026"}
 - title: o objetivo da meta
 - target_amount: valor numérico
-- deadline: prazo opcional no formato "MM/YYYY" ou "DD/MM/YYYY"
+- deadline: prazo opcional no formato "MM/YYYY". Hoje é {today_iso}.
+  Se o usuário disser só o mês (ex: "outubro"), use o ANO ATUAL se esse mês ainda não passou,
+  senão use ANO ATUAL + 1. NUNCA retorne uma data no passado.
 Se um campo não estiver na mensagem, omita do JSON.""",
 
     "contribute": """Extraia dados de contribuição para meta.
@@ -40,6 +46,8 @@ Retorne APENAS JSON: {"goal_identifier": "viagem", "new_target": 12000.0, "new_t
 - goal_identifier: nome da meta
 - new_target: novo valor total (opcional)
 - new_title: novo nome (opcional)
-- deadline: novo prazo (opcional, formato "MM/YYYY")
+- deadline: novo prazo (opcional, formato "MM/YYYY"). Hoje é {today_iso}.
+  Se o usuário disser só o mês, use o ANO ATUAL se esse mês ainda não passou,
+  senão use ANO ATUAL + 1. NUNCA retorne uma data no passado.
 Se um campo não estiver na mensagem ou não houver alteração, omita do JSON.""",
 }

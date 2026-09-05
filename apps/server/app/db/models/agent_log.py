@@ -1,32 +1,28 @@
 """AgentLog model — audit trail for BagCoin agent invocations."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 
+if TYPE_CHECKING:
+    from app.db.models.user import User
+
 
 class AgentLog(Base, TimestampMixin):
-    """Audit log for BagCoin agent invocations.
-
-    Records every request/response cycle for monitoring and debugging.
-
-    Attributes:
-        id: Auto-increment primary key.
-        user_id: FK to phone_users.
-        agent_name: Name of the agent that processed the request.
-        request_payload: JSON blob of the incoming request.
-        response_payload: JSON blob of the agent response.
-        status: Processing status (success, error, pending).
-    """
+    """Audit log for BagCoin agent invocations."""
 
     __tablename__ = "agent_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("phone_users.id", ondelete="CASCADE"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -36,10 +32,7 @@ class AgentLog(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(20), default="success", nullable=False)
 
     # Relationships
-    phone_user: Mapped["PhoneUser"] = relationship("PhoneUser", back_populates="agent_logs")
+    user: Mapped[User] = relationship("User", back_populates="agent_logs")
 
     def __repr__(self) -> str:
-        return (
-            f"<AgentLog(id={self.id}, agent={self.agent_name}, "
-            f"status={self.status}, user_id={self.user_id})>"
-        )
+        return f"<AgentLog(id={self.id}, agent={self.agent_name}, status={self.status}, user_id={self.user_id})>"

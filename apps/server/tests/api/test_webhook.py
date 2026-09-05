@@ -288,6 +288,45 @@ async def test_telegram_valid_message(client: AsyncClient):
         # Verifica phone_number sintético
         call_state = mock_orch.call_args[0][0]
         assert "telegram:123456789" in call_state["phone_number"]
+        assert call_state["report_id"] is None
+
+
+@pytest.mark.anyio
+async def test_telegram_report_response_includes_media_url(client: AsyncClient):
+    """POST /webhook/telegram com relatório gerado → retorna media.url."""
+    with (
+        patch("app.api.routes.v1.webhook.is_duplicate_message", return_value=False),
+        patch("app.api.routes.v1.webhook.get_or_create_user_sync") as mock_get_user,
+        patch("app.api.routes.v1.webhook.orchestrator.invoke") as mock_orch,
+    ):
+        mock_get_user.return_value = None
+        mock_orch.return_value = {
+            "response": "Relatório gerado.",
+            "report_id": 42,
+            "report_path": "/app/reports/report_telegram_42.pdf",
+        }
+
+        payload = {
+            "chat_id": "123456789",
+            "message": "gere um relatório em pdf",
+            "username": None,
+        }
+
+        response = await client.post(
+            TELEGRAM_URL,
+            json=payload,
+            headers=TELEGRAM_HEADERS,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["reply"] == "Relatório gerado."
+        assert data["media"] == {
+            "type": "document",
+            "url": "http://app:8000/api/v1/webhook/reports/42/download",
+            "filename": "report_telegram_42.pdf",
+            "mimetype": "application/pdf",
+        }
 
 
 @pytest.mark.anyio

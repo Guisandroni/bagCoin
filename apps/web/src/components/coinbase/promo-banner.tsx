@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { X } from "lucide-react"
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
@@ -16,17 +16,16 @@ interface PromoBannerProps {
 }
 
 export function PromoBanner({ id, title, description, illustration, className }: PromoBannerProps) {
-  const [dismissed, setDismissed] = useState(false)
-
-  useEffect(() => {
+  const [dismissed, setDismissed] = useState(() => {
     try {
       if (typeof window !== "undefined") {
-        setDismissed(localStorage.getItem(storageKey(id)) === "1")
+        return localStorage.getItem(storageKey(id)) === "1"
       }
     } catch {
       /* ignore */
     }
-  }, [id])
+    return false
+  })
 
   if (dismissed) return null
 

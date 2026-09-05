@@ -30,15 +30,15 @@ def get_user_financial_summary(phone_number: str) -> dict[str, Any]:
         expenses_sql = """
             SELECT COALESCE(SUM(amount), 0) as total 
             FROM transactions 
-            WHERE user_id = (SELECT id FROM transactions WHERE user_id = (SELECT id FROM phone_users WHERE phone_number = :phone) LIMIT 1) 
-            AND type = 'expense' 
+            WHERE user_id = (SELECT id FROM users WHERE phone_number = :phone)
+            AND type = 'EXPENSE' 
             AND transaction_date >= :date
         """
         income_sql = """
             SELECT COALESCE(SUM(amount), 0) as total 
             FROM transactions 
-            WHERE user_id = (SELECT id FROM phone_users WHERE phone_number = :phone)
-            AND type = 'income' 
+            WHERE user_id = (SELECT id FROM users WHERE phone_number = :phone)
+            AND type = 'INCOME' 
             AND transaction_date >= :date
         """
 
@@ -53,8 +53,8 @@ def get_user_financial_summary(phone_number: str) -> dict[str, Any]:
             SELECT c.name, SUM(t.amount) as total
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
-            WHERE t.user_id = (SELECT id FROM phone_users WHERE phone_number = :phone)
-            AND t.type = 'expense'
+            WHERE t.user_id = (SELECT id FROM users WHERE phone_number = :phone)
+            AND t.type = 'EXPENSE'
             AND t.transaction_date >= :date
             GROUP BY c.name
             ORDER BY total DESC
@@ -67,7 +67,7 @@ def get_user_financial_summary(phone_number: str) -> dict[str, Any]:
         # Contagem de transações
         count_sql = """
             SELECT COUNT(*) as count FROM transactions 
-            WHERE user_id = (SELECT id FROM phone_users WHERE phone_number = :phone)
+            WHERE user_id = (SELECT id FROM users WHERE phone_number = :phone)
             AND transaction_date >= :date
         """
         tx_count = execute_sql_query(count_sql, {"phone": phone_number, "date": thirty_days_ago})

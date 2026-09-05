@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation"
 import { DashboardView } from "@/components/release/dashboard-view"
 import { getReleaseNavItems, summaryToDashboardSummary } from "@/lib/adapters"
+import { useExportTransactionsCsv } from "@/hooks/use-transactions"
 import type { TransactionSummary, ServerBudget, ServerGoal } from "@/lib/api-server"
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
 export function DashboardClient({ summary, budgets, goals }: Props) {
   const pathname = usePathname()
   const router = useRouter()
+  const exportCsv = useExportTransactionsCsv()
   const dashboardData = summaryToDashboardSummary(summary, budgets, goals)
   const navItems = getReleaseNavItems(pathname)
 
@@ -26,7 +28,10 @@ export function DashboardClient({ summary, budgets, goals }: Props) {
         router.push(href)
       }}
       onViewAllTransactions={() => router.push("/app/transacoes")}
+      onViewAllCategories={() => router.push("/app/categorias")}
       onAddGoal={() => router.push("/app/metas")}
+      onExportCsv={() => exportCsv.mutate()}
+      isExportingCsv={exportCsv.isPending}
     />
   )
 }

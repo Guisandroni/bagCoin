@@ -6,6 +6,7 @@ These handlers convert domain exceptions to proper HTTP responses.
 import logging
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
 from app.core.exceptions import AppException
@@ -38,13 +39,13 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
 
     return JSONResponse(
         status_code=exc.status_code,
-        content={
+        content=jsonable_encoder({
             "error": {
                 "code": exc.code,
                 "message": exc.message,
                 "details": exc.details or None,
             }
-        },
+        }),
         headers=headers,
     )
 

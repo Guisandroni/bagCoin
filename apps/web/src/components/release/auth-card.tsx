@@ -10,7 +10,12 @@ interface AuthCardProps {
 
 export function AuthCard({ children, className }: AuthCardProps) {
   return (
-    <div className="rls w-full max-w-md mx-auto flex flex-col bg-[var(--rls-surface-container-lowest)] rounded-[var(--rls-radius-lg)] shadow-sm p-6 sm:p-8">
+    <div
+      className={cn(
+        "rls w-full max-w-md mx-auto flex flex-col bg-[var(--rls-surface-container-lowest)] rounded-[var(--rls-radius-lg)] shadow-sm p-6 sm:p-8",
+        className
+      )}
+    >
       {children}
     </div>
   )
@@ -85,10 +90,5 @@ interface DecorativeBlobsProps {
 }
 
 export function DecorativeBlobs({ className }: DecorativeBlobsProps) {
-  return (
-    <div className={cn("fixed inset-0 pointer-events-none -z-10", className)}>
-      <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-[var(--rls-primary-container)]/5 blur-[100px]" />
-      <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] rounded-full bg-[var(--rls-secondary-container)]/10 blur-[80px]" />
-    </div>
-  )
+  return <div className={cn("hidden", className)} aria-hidden />
 }

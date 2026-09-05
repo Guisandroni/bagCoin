@@ -1,7 +1,5 @@
 """REST service for CreditCard operations."""
 
-from uuid import UUID
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
@@ -11,7 +9,7 @@ from app.schemas.credit_card import CreditCardCreate, CreditCardResponse, Credit
 
 async def list_credit_cards(
     db: AsyncSession,
-    user_id: UUID,
+    user_id: int,
     *,
     skip: int = 0,
     limit: int = 50,
@@ -23,7 +21,7 @@ async def list_credit_cards(
 
 async def create_credit_card(
     db: AsyncSession,
-    user_id: UUID,
+    user_id: int,
     data: CreditCardCreate,
 ) -> CreditCardResponse:
     """Create a new credit card."""
@@ -41,7 +39,7 @@ async def create_credit_card(
     return CreditCardResponse.model_validate(card)
 
 
-async def get_credit_card(db: AsyncSession, card_id: UUID, user_id: UUID) -> CreditCardResponse:
+async def get_credit_card(db: AsyncSession, card_id: int, user_id: int) -> CreditCardResponse:
     """Get a credit card by ID."""
     card = await credit_card_repo.get_by_id(db, card_id)
     if not card or card.user_id != user_id:
@@ -51,8 +49,8 @@ async def get_credit_card(db: AsyncSession, card_id: UUID, user_id: UUID) -> Cre
 
 async def update_credit_card(
     db: AsyncSession,
-    card_id: UUID,
-    user_id: UUID,
+    card_id: int,
+    user_id: int,
     data: CreditCardUpdate,
 ) -> CreditCardResponse:
     """Update a credit card."""
@@ -64,7 +62,7 @@ async def update_credit_card(
     return CreditCardResponse.model_validate(card)
 
 
-async def delete_credit_card(db: AsyncSession, card_id: UUID, user_id: UUID) -> None:
+async def delete_credit_card(db: AsyncSession, card_id: int, user_id: int) -> None:
     """Delete a credit card."""
     card = await credit_card_repo.get_by_id(db, card_id)
     if not card or card.user_id != user_id:
