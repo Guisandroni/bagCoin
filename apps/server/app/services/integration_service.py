@@ -10,7 +10,6 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 from urllib.parse import quote
-from uuid import UUID
 
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,12 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.exceptions import ValidationError
-from app.db.models.budget import Budget
-from app.db.models.goal import Goal
 from app.db.models.integration_link_token import IntegrationLinkToken
-from app.db.models.phone_user import PhoneUser
-from app.db.models.report import Report
-from app.db.models.transaction import Transaction
 from app.db.models.user import User
 from app.db.session import sync_session_maker
 from app.schemas.integration import IntegrationStatus, LinkTokenResponse
@@ -33,7 +27,7 @@ logger = logging.getLogger(__name__)
 PAIR_KEY_PREFIX = "pair:tok:"
 
 LINK_TOKEN_RE = re.compile(
-    r"^\s*(?:#bagcoin\s+link|/start)\s+([A-Za-z0-9_-]{16,})\s*$",
+    r"^\s*(?:Enviando token para autenticacao\.\s*)?(?:#bagcoin\s+link|/start)\s+([A-Za-z0-9_-]{16,})\s*$",
     re.IGNORECASE,
 )
 
@@ -110,20 +104,78 @@ def _redis_getdel(token: str) -> str | None:
         return res[0] if res else None
 
 
-def _merge_phone_user_into_web_user_sync(db: Session, web_user: User, phone_user: PhoneUser) -> None:
-    """Attach financial rows to the web user; keep PhoneUser for bot FK continuity."""
+def _merge_channel_user_into_web_user_sync(db: Session, web_user: User, channel_user: User) -> None:
+    """Move channel-owned data into the web user and remove the duplicate row."""
+    if web_user.id == channel_user.id:
+        return
+
+    from app.db.models.account import Account
+    from app.db.models.agent_log import AgentLog
+    from app.db.models.budget import Budget
+    from app.db.models.category import Category
+    from app.db.models.chat_file import ChatFile
+    from app.db.models.conversation import Conversation
+    from app.db.models.conversation_share import ConversationShare
+    from app.db.models.credit_card import CreditCard
+    from app.db.models.goal import Goal
+    from app.db.models.integration_link_token import IntegrationLinkToken
+    from app.db.models.message_rating import MessageRating
+    from app.db.models.phone_conversation import PhoneConversation
+    from app.db.models.recurring_transaction import RecurringTransaction
+    from app.db.models.report import Report
+    from app.db.models.transaction import Transaction
+
+    source_id = channel_user.id
+    target_id = web_user.id
+
+    if channel_user.phone_number and not web_user.phone_number:
+        # Free the unique phone_number before assigning it to the web user.
+        phone_number = channel_user.phone_number
+        channel_user.phone_number = None
+        db.flush()
+        web_user.phone_number = phone_number
+    if channel_user.telegram_chat_id and not web_user.telegram_chat_id:
+        telegram_chat_id = channel_user.telegram_chat_id
+        channel_user.telegram_chat_id = None
+        db.flush()
+        web_user.telegram_chat_id = telegram_chat_id
+    if not web_user.platform and channel_user.platform:
+        web_user.platform = channel_user.platform
+    if not web_user.preferences and channel_user.preferences:
+        web_user.preferences = channel_user.preferences
+    if not web_user.financial_profile and channel_user.financial_profile:
+        web_user.financial_profile = channel_user.financial_profile
+
+    for model in (
+        Account,
+        AgentLog,
+        Budget,
+        Category,
+        ChatFile,
+        Conversation,
+        CreditCard,
+        Goal,
+        IntegrationLinkToken,
+        MessageRating,
+        PhoneConversation,
+        RecurringTransaction,
+        Report,
+        Transaction,
+    ):
+        db.execute(update(model).where(model.user_id == source_id).values(user_id=target_id))
+
     db.execute(
-        update(Transaction)
-        .where(Transaction.user_id == phone_user.id)
-        .values(user_uuid=web_user.id, user_id=None)
+        update(ConversationShare)
+        .where(ConversationShare.shared_by == source_id)
+        .values(shared_by=target_id)
     )
     db.execute(
-        update(Budget).where(Budget.user_id == phone_user.id).values(user_uuid=web_user.id)
+        update(ConversationShare)
+        .where(ConversationShare.shared_with == source_id)
+        .values(shared_with=target_id)
     )
-    db.execute(update(Goal).where(Goal.user_id == phone_user.id).values(user_uuid=web_user.id))
-    db.execute(update(Report).where(Report.user_id == phone_user.id).values(user_uuid=web_user.id))
-    phone_user.merged_into_user_id = web_user.id
-    web_user.phone_number = phone_user.phone_number
+    db.flush()
+    db.delete(channel_user)
 
 
 def try_consume_link_pairing_sync(
@@ -143,7 +195,7 @@ def try_consume_link_pairing_sync(
     if not token:
         return None
 
-    from app.agents.persistence import get_or_create_user
+    from app.agents.persistence import ensure_default_categories_sync
 
     err_invalid = (
         "Não consegui validar o link. O código pode ter expirado ou já foi usado. "
@@ -187,35 +239,38 @@ def try_consume_link_pairing_sync(
         if not data:
             return err_invalid
 
-        target_user_id = UUID(data["user_id"])
-        web_user = (
-            db.query(User).filter(User.id == target_user_id).with_for_update().one_or_none()
-        )
+        try:
+            target_user_id = int(data["user_id"])
+        except (TypeError, ValueError):
+            return err_invalid
+        web_user = db.query(User).filter(User.id == target_user_id).with_for_update().one_or_none()
         if not web_user:
             return "Conta não encontrada. Gere um novo link no site."
 
-        phone_user = get_or_create_user(phone_number, db)
-        phone_user = (
-            db.query(PhoneUser).filter(PhoneUser.id == phone_user.id).with_for_update().one()
-        )
+        channel_user = db.query(User).filter(User.phone_number == phone_number).one_or_none()
 
-        if phone_user.merged_into_user_id and phone_user.merged_into_user_id != web_user.id:
-            return "Este número já está vinculado a outra conta BagCoin."
-
-        if web_user.phone_number and web_user.phone_number != phone_user.phone_number:
+        if channel_user is None:
+            web_user.phone_number = phone_number
+            web_user.platform = web_user.platform or channel
+            web_user.preferences = web_user.preferences or {"language": "pt-BR", "currency": "BRL"}
+            web_user.financial_profile = web_user.financial_profile or {}
+            ensure_default_categories_sync(db, web_user)
+            name = web_user.full_name or "pronto"
+            reply = (
+                f"Tudo certo, {name}! Sua conta foi conectada. "
+                "Pode lançar transações por aqui e ver tudo no painel web."
+            )
+        elif web_user.id == channel_user.id:
+            name = web_user.full_name or "tudo certo"
+            reply = f"Olá, {name}! Sua conta já estava conectada. Pode lançar transações por aqui. 😊"
+        elif web_user.phone_number and web_user.phone_number != phone_number:
             return (
                 "Sua conta web já está vinculada a outro número. "
                 "Desvincule ou use a mesma conta no site."
             )
-
-        if (
-            phone_user.merged_into_user_id == web_user.id
-            and web_user.phone_number == phone_user.phone_number
-        ):
-            name = web_user.full_name or "tudo certo"
-            reply = f"Olá, {name}! Sua conta já estava conectada. Pode lançar transações por aqui. 😊"
         else:
-            _merge_phone_user_into_web_user_sync(db, web_user, phone_user)
+            _merge_channel_user_into_web_user_sync(db, web_user, channel_user)
+            ensure_default_categories_sync(db, web_user)
             name = web_user.full_name or "pronto"
             reply = (
                 f"Tudo certo, {name}! Sua conta foi conectada. "
@@ -235,7 +290,7 @@ def try_consume_link_pairing_sync(
         db.close()
 
 
-def _store_token_db_fallback(db: Session, token: str, user_id: UUID, channel: str, expires_at: datetime) -> None:
+def _store_token_db_fallback(db: Session, token: str, user_id: int, channel: str, expires_at: datetime) -> None:
     row = IntegrationLinkToken(
         token=token,
         user_id=user_id,
@@ -253,7 +308,7 @@ class IntegrationService:
         self.db = db
 
     def _build_deeplinks(self, token: str) -> tuple[str | None, str | None, str, str]:
-        wa_cmd = f"#bagcoin link {token}"
+        wa_cmd = f"Enviando token para autenticacao. #bagcoin link {token}"
         tg_cmd = f"/start {token}"
         wa_num = _whatsapp_bot_digits()
         deeplink_wa = (
@@ -265,7 +320,7 @@ class IntegrationService:
 
     async def create_link_token(
         self,
-        user_id: UUID,
+        user_id: int,
         channel: IntegrationChannel,
     ) -> LinkTokenResponse:
         if channel == "whatsapp" and not _whatsapp_bot_digits():
@@ -298,7 +353,9 @@ class IntegrationService:
                 break
             if stored is None:
                 await self.db.run_sync(
-                    lambda s: _store_token_db_fallback(s, token, user_id, channel, expires_at)
+                    lambda s, token=token: _store_token_db_fallback(
+                        s, token, user_id, channel, expires_at
+                    )
                 )
                 await self.db.commit()
                 break

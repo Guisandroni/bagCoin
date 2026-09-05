@@ -1,18 +1,18 @@
 import type { Transaction, Account, Card, Budget, Goal, Report } from "@/types"
 
 export const MOCK_TRANSACTIONS: Transaction[] = [
-  { id: "1", name: "Supermercado Pão de Açúcar", category: "Alimentação", amount: -287.50, date: "30 Abr", source: "whatsapp", status: "confirmed" },
-  { id: "2", name: "Salário — Empresa X", category: "Salário", amount: 8500.00, date: "28 Abr", source: "auto", status: "confirmed" },
-  { id: "3", name: "Uber — Centro → Vila Madalena", category: "Transporte", amount: -34.90, date: "28 Abr", source: "whatsapp", status: "pending" },
-  { id: "4", name: "Netflix mensal", category: "Lazer", amount: -55.90, date: "27 Abr", source: "auto", status: "confirmed" },
-  { id: "5", name: "Farmácia Drogasil", category: "Saúde", amount: -89.40, date: "27 Abr", source: "whatsapp", status: "pending" },
-  { id: "6", name: "Aluguel — Abril", category: "Moradia", amount: -2200.00, date: "25 Abr", source: "auto", status: "confirmed" },
-  { id: "7", name: "Curso de Python — Udemy", category: "Educação", amount: -49.90, date: "24 Abr", source: "manual", status: "confirmed" },
-  { id: "8", name: "iFood — Restaurante Sukiya", category: "Alimentação", amount: -62.80, date: "23 Abr", source: "whatsapp", status: "confirmed" },
-  { id: "9", name: "Uber — Pinheiros → Moema", category: "Transporte", amount: -42.30, date: "22 Abr", source: "whatsapp", status: "confirmed" },
-  { id: "10", name: "Spotify Premium", category: "Lazer", amount: -21.90, date: "20 Abr", source: "auto", status: "confirmed" },
-  { id: "11", name: "Freelance — Projeto Design", category: "Salário", amount: 3200.00, date: "18 Abr", source: "manual", status: "confirmed" },
-  { id: "12", name: "Academia SmartFit", category: "Saúde", amount: -99.90, date: "15 Abr", source: "auto", status: "confirmed" },
+  { id: "1", name: "Supermercado Pão de Açúcar", category: "Alimentação", type: "despesa", amount: 287.50, date: "30 Abr", source: "whatsapp", status: "confirmed" },
+  { id: "2", name: "Salário — Empresa X", category: "Salário", type: "receita", amount: 8500.00, date: "28 Abr", source: "auto", status: "confirmed" },
+  { id: "3", name: "Uber — Centro → Vila Madalena", category: "Transporte", type: "despesa", amount: 34.90, date: "28 Abr", source: "whatsapp", status: "pending" },
+  { id: "4", name: "Netflix mensal", category: "Lazer", type: "despesa", amount: 55.90, date: "27 Abr", source: "auto", status: "confirmed" },
+  { id: "5", name: "Farmácia Drogasil", category: "Saúde", type: "despesa", amount: 89.40, date: "27 Abr", source: "whatsapp", status: "pending" },
+  { id: "6", name: "Aluguel — Abril", category: "Moradia", type: "despesa", amount: 2200.00, date: "25 Abr", source: "auto", status: "confirmed" },
+  { id: "7", name: "Curso de Python — Udemy", category: "Educação", type: "despesa", amount: 49.90, date: "24 Abr", source: "manual", status: "confirmed" },
+  { id: "8", name: "iFood — Restaurante Sukiya", category: "Alimentação", type: "despesa", amount: 62.80, date: "23 Abr", source: "whatsapp", status: "confirmed" },
+  { id: "9", name: "Uber — Pinheiros → Moema", category: "Transporte", type: "despesa", amount: 42.30, date: "22 Abr", source: "whatsapp", status: "confirmed" },
+  { id: "10", name: "Spotify Premium", category: "Lazer", type: "despesa", amount: 21.90, date: "20 Abr", source: "auto", status: "confirmed" },
+  { id: "11", name: "Freelance — Projeto Design", category: "Salário", type: "receita", amount: 3200.00, date: "18 Abr", source: "manual", status: "confirmed" },
+  { id: "12", name: "Academia SmartFit", category: "Saúde", type: "despesa", amount: 99.90, date: "15 Abr", source: "auto", status: "confirmed" },
 ]
 
 export const MOCK_ACCOUNTS: Account[] = [

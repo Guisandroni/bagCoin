@@ -52,6 +52,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         "/api/v1/auth/login",
         "/api/v1/auth/register",
         "/api/v1/auth/refresh",
+        "/api/v1/auth/google",
         "/api/v1/health",
         "/api/v1/ready",
         "/api/v1/webhook",
@@ -72,9 +73,20 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if settings.DEBUG:
             return await call_next(request)
 
-        # Skip for exempt paths
+        # Skip for exempt paths — but still set the CSRF cookie if missing
         if self._is_exempt(request):
-            return await call_next(request)
+            response = await call_next(request)
+            if not request.cookies.get(self.cookie_name):
+                csrf_token = self._generate_token()
+                response.set_cookie(
+                    key=self.cookie_name,
+                    value=csrf_token,
+                    httponly=False,
+                    secure=not settings.DEBUG,
+                    samesite="lax",
+                    max_age=3600 * 24,
+                )
+            return response
 
         # Get or generate CSRF token
         csrf_token = request.cookies.get(self.cookie_name)

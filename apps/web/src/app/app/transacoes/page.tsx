@@ -1,6 +1,6 @@
 import dynamic from "next/dynamic"
-import { getTransactions } from "@/lib/api-server"
-import { serverTransactionToRelease } from "@/lib/adapters"
+import { getCategories, getTransactions } from "@/lib/api-server"
+import { categoriesFromSources, serverTransactionToRelease } from "@/lib/adapters"
 import TransacoesLoading from "./loading"
 
 const TransacoesClient = dynamic(() => import("./transacoes-client").then((m) => m.TransacoesClient), {
@@ -8,9 +8,13 @@ const TransacoesClient = dynamic(() => import("./transacoes-client").then((m) =>
 })
 
 export default async function TransacoesPage() {
-  const result = await getTransactions()
+  const [result, serverCategories] = await Promise.all([
+    getTransactions(),
+    getCategories(),
+  ])
   const serverTransactions = result?.items ?? []
   const transactions = serverTransactions.map(serverTransactionToRelease)
+  const categories = categoriesFromSources(null, serverCategories)
 
-  return <TransacoesClient transactions={transactions} />
+  return <TransacoesClient transactions={transactions} categories={categories} />
 }

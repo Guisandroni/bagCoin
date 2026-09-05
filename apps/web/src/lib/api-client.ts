@@ -1,10 +1,28 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
+const API_BASE_URL = "/api/v1"
+
+export interface ApiClientError extends Error {
+  code?: string
+  details?: unknown
+}
+
+function isAuthFlowRequest(url?: string) {
+  return !!url && /\/auth\/(login|register|google|verify-email|resend-verification|forgot-password|reset-password|refresh)$/.test(url)
+}
+
+function translateAxiosMessage(message?: string) {
+  if (!message) return null
+  if (message === "Network Error") return "Erro de conexão. Tente novamente."
+  if (message === "Request failed with status code 401") return "Sua sessão expirou. Faça login novamente."
+  if (message === "Request failed with status code 422") return "Os dados informados são inválidos."
+  return message
+}
 
 interface TokenStore {
   accessToken: string | null
-  setTokens: (access: string, refresh: string) => void
+  csrfToken: string | null
+  setTokens: (access: string, refresh: string, csrf?: string) => void
   clearTokens: () => void
   getAccessToken: () => string | null
 }
@@ -13,14 +31,17 @@ let memoryToken: string | null = null
 
 const tokenStore: TokenStore = {
   accessToken: null,
-  setTokens(access: string, _refresh: string) {
+  csrfToken: null,
+  setTokens(access: string, _refresh: string, csrf?: string) {
     void _refresh
     memoryToken = access
     this.accessToken = access
+    if (csrf) this.csrfToken = csrf
   },
   clearTokens() {
     memoryToken = null
     this.accessToken = null
+    this.csrfToken = null
   },
   getAccessToken() {
     if (typeof window === "undefined") return null
@@ -64,9 +85,13 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     config.headers.Authorization = `Bearer ${token}`
   }
   if (typeof window !== "undefined" && config.method !== "get") {
-    const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/)
-    if (match && config.headers) {
-      config.headers["X-CSRF-Token"] = decodeURIComponent(match[1])
+    // Prefer in-memory CSRF token (cross-domain safe), fallback to cookie
+    const csrfToken = tokenStore.csrfToken || (() => {
+      const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/)
+      return match ? decodeURIComponent(match[1]) : null
+    })()
+    if (csrfToken && config.headers) {
+      config.headers["X-CSRF-Token"] = csrfToken
     }
   }
   return config
@@ -93,13 +118,16 @@ apiClient.interceptors.response.use(
   (response) => {
     if (response.data?.access_token && response.data?.refresh_token) {
       setAuthCookies(response.data.access_token, response.data.refresh_token)
+      if (response.data?.csrf_token) {
+        tokenStore.csrfToken = response.data.csrf_token
+      }
     }
     return response
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthFlowRequest(originalRequest.url)) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({
@@ -123,7 +151,7 @@ apiClient.interceptors.response.use(
 if (!refreshToken) {
         clearAuthCookies()
         isRefreshing = false
-        processQueue(new Error("No refresh token"))
+        processQueue(new Error("Sessão expirada"))
         if (typeof window !== "undefined") {
           window.location.href = "/login"
         }
@@ -159,10 +187,22 @@ if (!refreshToken) {
   },
 )
 
-function extractErrorMessage(error: AxiosError): Error {
-  const data = error.response?.data as { error?: { message?: string }; detail?: string } | undefined
-  const message = data?.error?.message || (typeof data?.detail === "string" ? data.detail : null) || error.message || "Erro desconhecido"
-  return new Error(message)
+function extractErrorMessage(error: AxiosError): ApiClientError {
+  const data = error.response?.data as {
+    error?: { code?: string; message?: string; details?: unknown }
+    detail?: string | Array<{ loc?: Array<string | number>; msg?: string; type?: string }>
+  } | undefined
+  const validationDetail = Array.isArray(data?.detail) ? data.detail[0] : null
+  const message =
+    data?.error?.message ||
+    (typeof data?.detail === "string" ? data.detail : null) ||
+    validationDetail?.msg ||
+    translateAxiosMessage(error.message) ||
+    "Erro desconhecido"
+  const enriched = new Error(message) as ApiClientError
+  enriched.code = data?.error?.code
+  enriched.details = data?.error?.details ?? data?.detail
+  return enriched
 }
 
 // ---- typed convenience wrapper ----

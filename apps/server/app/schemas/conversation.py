@@ -114,7 +114,7 @@ class ConversationBase(BaseSchema):
 class ConversationCreate(ConversationBase):
     """Schema for creating a conversation."""
 
-    user_id: UUID | None = Field(default=None, description="Owner user ID")
+    user_id: int | None = Field(default=None, description="Owner user ID")
 
 
 class ConversationUpdate(BaseSchema):
@@ -128,7 +128,7 @@ class ConversationRead(ConversationBase, TimestampSchema):
     """Schema for reading a conversation (API response)."""
 
     id: UUID
-    user_id: UUID | None = None
+    user_id: int | None = None
     is_archived: bool = False
 
 

@@ -11,6 +11,7 @@ class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    csrf_token: str | None = None
 
 
 class TokenPayload(BaseModel):

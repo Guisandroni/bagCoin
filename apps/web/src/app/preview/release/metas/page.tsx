@@ -1,7 +1,7 @@
 "use client"
 
 import { SavingsGoalsView } from "@/components/release"
-import { mockGoals, mockNavItems } from "@/components/release/__preview__/mock-data"
+import { mockGoals } from "@/components/release/__preview__/mock-data"
 
 export default function MetasPreview() {
   return (
@@ -10,7 +10,6 @@ export default function MetasPreview() {
       totalCurrent={15400}
       totalTarget={25000}
       globalPercentage={62}
-      onBack={() => {}}
       onAddGoal={() => {}}
     />
   )

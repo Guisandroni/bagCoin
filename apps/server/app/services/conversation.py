@@ -157,7 +157,7 @@ class ConversationService:
         conversation_id: UUID,
         *,
         include_messages: bool = False,
-        user_id: UUID | None = None,
+        user_id: int | None = None,
     ) -> Conversation:
         """Get conversation by ID.
 
@@ -189,7 +189,7 @@ class ConversationService:
 
     async def list_conversations(
         self,
-        user_id: UUID | None = None,
+        user_id: int | None = None,
         *,
         skip: int = 0,
         limit: int = 50,
@@ -252,7 +252,7 @@ class ConversationService:
         skip: int = 0,
         limit: int = 50,
         search: str | None = None,
-        user_id: UUID | None = None,
+        user_id: int | None = None,
         include_archived: bool = False,
     ) -> "AdminConversationList":
         """Admin: list conversations with owner email and message counts."""
@@ -296,7 +296,7 @@ class ConversationService:
         self,
         conversation_id: UUID,
         data: ConversationUpdate,
-        user_id: UUID | None = None,
+        user_id: int | None = None,
     ) -> Conversation:
         """Update a conversation.
 
@@ -315,7 +315,7 @@ class ConversationService:
     async def archive_conversation(
         self,
         conversation_id: UUID,
-        user_id: UUID | None = None,
+        user_id: int | None = None,
     ) -> Conversation:
         """Archive a conversation.
 
@@ -338,7 +338,7 @@ class ConversationService:
     async def delete_conversation(
         self,
         conversation_id: UUID,
-        user_id: UUID | None = None,
+        user_id: int | None = None,
     ) -> bool:
         """Delete a conversation.
 
@@ -392,7 +392,7 @@ class ConversationService:
         skip: int = 0,
         limit: int = 100,
         include_tool_calls: bool = False,
-        user_id: UUID | None = None,
+        user_id: int | None = None,
     ) -> tuple[list[Message | MessageRead], int]:
         """List messages in a conversation.
 

@@ -1,5 +1,16 @@
 import { z } from "zod"
 
+const passwordMinLengthMessage = "Senha tem que ter no mínimo 6 dígitos"
+const passwordComplexityMessage = "Senha deve conter letra maiúscula, letra minúscula e número"
+
+const passwordSchema = z
+  .string()
+  .min(6, passwordMinLengthMessage)
+  .max(128, "Senha muito longa")
+  .refine((value) => /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value), {
+    message: passwordComplexityMessage,
+  })
+
 export const loginSchema = z.object({
   email: z.string().min(1, "Email é obrigatório").email("Email inválido"),
   password: z.string().min(1, "Senha é obrigatória"),
@@ -9,24 +20,29 @@ export const registerSchema = z
   .object({
     name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").max(100, "Nome muito longo"),
     email: z.string().min(1, "Email é obrigatório").email("Email inválido"),
-    password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres").max(128, "Senha muito longa"),
+    password: passwordSchema,
     confirmPassword: z.string().min(1, "Confirme a senha"),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "Senhas não conferem",
+    message: "Senhas não coincidem",
     path: ["confirmPassword"],
   })
 
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, "Senha atual é obrigatória"),
-    newPassword: z.string().min(6, "Nova senha deve ter pelo menos 6 caracteres"),
+    newPassword: passwordSchema,
     confirmPassword: z.string().min(1, "Confirme a nova senha"),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
-    message: "Senhas não conferem",
+    message: "Senhas não coincidem",
     path: ["confirmPassword"],
   })
+
+export const verifyEmailSchema = z.object({
+  email: z.string().min(1, "Email é obrigatório").email("Email inválido"),
+  code: z.string().regex(/^\d{6}$/, "Digite um código de 6 dígitos"),
+})
 
 export const budgetSchema = z.object({
   category: z.string().min(1, "Categoria é obrigatória"),
@@ -72,6 +88,7 @@ export const profileSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>
 export type RegisterInput = z.infer<typeof registerSchema>
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>
 export type BudgetInput = z.infer<typeof budgetSchema>
 export type GoalInput = z.infer<typeof goalSchema>
 export type TransactionInput = z.infer<typeof transactionSchema>

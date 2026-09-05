@@ -1,6 +1,6 @@
 """Pattern learning service — learns user habits from transaction patterns.
 
-Stores learned preferences in PhoneUser.preferences['learned_patterns'] JSON field.
+Stores learned preferences in User.preferences['learned_patterns'] JSON field.
 """
 
 import logging
@@ -75,7 +75,7 @@ def learn_from_transaction(
         "last_updated": datetime.now(UTC).isoformat(),
     }
 
-    # Persist to PhoneUser.preferences
+    # Persist to User.preferences
     _save_patterns(phone_number, patterns)
     logger.info(
         f"Patterns learned for {phone_number}: "
@@ -102,7 +102,7 @@ def _hour_to_period(hour: int) -> str:
 
 
 def _save_patterns(phone_number: str, patterns: dict):
-    """Persist learned patterns to PhoneUser.preferences JSON field."""
+    """Persist learned patterns to User.preferences JSON field."""
     from sqlalchemy.orm.attributes import flag_modified
 
     from app.agents.persistence import get_or_create_user

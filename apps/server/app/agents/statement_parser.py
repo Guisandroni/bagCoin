@@ -12,6 +12,8 @@ import re
 from datetime import datetime
 from typing import Any
 
+from app.services.docx_text import extract_docx_text
+
 logger = logging.getLogger(__name__)
 
 # Categorização heurística baseada em palavras-chave do extrato
@@ -112,6 +114,81 @@ def _parse_brazilian_value(value_str: str) -> float | None:
         return float(val)
     except ValueError:
         return None
+
+
+def _normalize_text(text: str) -> str:
+    return (
+        text.lower()
+        .replace("á", "a")
+        .replace("à", "a")
+        .replace("â", "a")
+        .replace("ã", "a")
+        .replace("é", "e")
+        .replace("ê", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ô", "o")
+        .replace("õ", "o")
+        .replace("ú", "u")
+        .replace("ç", "c")
+    )
+
+
+def _is_identifier_like(value: str) -> bool:
+    """Return True for CNPJ/CPF/CEP/phone/IDs, not transaction amounts."""
+    digits = re.sub(r"\D", "", value)
+    if len(digits) >= 8:
+        return True
+    if re.fullmatch(r"\d{1,3}(?:\.\d{3}){2,},\d{2}", value.strip()):
+        parsed = _parse_brazilian_value(value)
+        return parsed is not None and parsed >= 100_000
+    return False
+
+
+def _looks_like_date_token(value: str) -> bool:
+    stripped = value.strip()
+    return bool(
+        re.fullmatch(r"\d{1,2}/\d{1,2}/\d{2,4}", stripped)
+        or re.fullmatch(r"\d{4}-\d{1,2}-\d{1,2}", stripped)
+        or re.fullmatch(r"(?:19|20)\d{2}", stripped)
+    )
+
+
+def _extract_money_candidate(line: str) -> tuple[str, tuple[int, int]] | None:
+    """Extract the most likely money value from a loose statement/receipt line."""
+    if _looks_like_date_token(line):
+        return None
+    money_patterns = [
+        r"R\$\s*(-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d+[,.]\d{2})",
+        r"(-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d+[,.]\d{2}|-?\d{1,5})\s*(?:reais|brl)\b",
+        r"(-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d+[,.]\d{2})(?![\d.,])",
+        r"\b(-?\d{1,5})\b\s*$",
+    ]
+    candidates: list[tuple[str, tuple[int, int]]] = []
+    for pattern in money_patterns:
+        for match in re.finditer(pattern, line, flags=re.IGNORECASE):
+            value = match.group(1)
+            if _is_identifier_like(value) or _looks_like_date_token(value):
+                continue
+            candidates.append((value, match.span(1)))
+        if candidates:
+            break
+    if not candidates:
+        return None
+    return candidates[-1]
+
+
+def _clean_transaction_description(line: str, span: tuple[int, int]) -> str:
+    before = line[: span[0]]
+    after = line[span[1] :]
+    description = f"{before} {after}"
+    description = re.sub(r"R\$", " ", description, flags=re.IGNORECASE)
+    description = re.sub(r"\b(?:cnpj|cpf|cep)\b[:\s.-]*\d[\d./ -]+", " ", description, flags=re.IGNORECASE)
+    description = re.sub(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}", " ", description)
+    description = re.sub(r"\d{3}\.\d{3}\.\d{3}-\d{2}", " ", description)
+    description = re.sub(r"\b\d{5}-?\d{3}\b", " ", description)
+    description = re.sub(r"\s+", " ", description).strip(" -:;|")
+    return description or "Transação bancária"
 
 
 def _is_statement_csv(content: str) -> bool:
@@ -273,29 +350,31 @@ def parse_ofx(content: str) -> list[dict[str, Any]]:
     Extrai transações <STMTTRN>... </STMTTRN>
     """
     transactions = []
+
+    def tag_value(block: str, tag: str) -> str | None:
+        match = re.search(rf"<{tag}>\s*([^<\r\n]+)", block, re.IGNORECASE)
+        return match.group(1).strip() if match else None
+
     # Encontra todos os blocos STMTTRN
     stmt_blocks = re.findall(r"<STMTTRN>(.*?)</STMTTRN>", content, re.DOTALL | re.IGNORECASE)
     for block in stmt_blocks:
         try:
-            trntype = re.search(r"<TRNTYPE>(.*?)(?:<|$)", block, re.IGNORECASE)
-            dtposted = re.search(r"<DTPOSTED>(\d{8})", block, re.IGNORECASE)
-            trnamt = re.search(r"<TRNAMT>(.*?)(?:<|$)", block, re.IGNORECASE)
-            memo = re.search(r"<MEMO>(.*?)(?:<|$)", block, re.IGNORECASE)
-            fitid = re.search(r"<FITID>(.*?)(?:<|$)", block, re.IGNORECASE)
-            if not dtposted or not trnamt:
+            trntype = tag_value(block, "TRNTYPE")
+            date_str = tag_value(block, "DTPOSTED")
+            amount_str = tag_value(block, "TRNAMT")
+            memo = tag_value(block, "MEMO")
+            fitid = tag_value(block, "FITID")
+            if not date_str or not amount_str:
                 continue
-            date_str = dtposted.group(1)
             date = datetime.strptime(date_str, "%Y%m%d").strftime("%Y-%m-%d")
-            amount = float(trnamt.group(1).strip())
-            desc = (
-                memo.group(1).strip()
-                if memo
-                else (fitid.group(1).strip() if fitid else "Transação OFX")
-            )
-            trn_type = trntype.group(1).strip().upper() if trntype else ""
+            amount = float(amount_str)
+            desc = memo or fitid or "Transação OFX"
+            trn_type = (trntype or "").upper()
             if trn_type == "CREDIT" or trn_type == "DEP":
                 tx_type = "INCOME"
-            elif trn_type == "DEBIT" or trn_type == "XFER" or trn_type == "PAYMENT":
+            elif trn_type in {"ATM", "DEBIT", "FEE", "PAYMENT", "POS"}:
+                tx_type = "EXPENSE"
+            elif trn_type == "XFER":
                 tx_type = "EXPENSE" if amount < 0 else "INCOME"
             else:
                 tx_type = "INCOME" if amount > 0 else "EXPENSE"
@@ -315,39 +394,195 @@ def parse_ofx(content: str) -> list[dict[str, Any]]:
     return transactions
 
 
+def _money_token_matches(text: str) -> list[re.Match[str]]:
+    return list(re.finditer(r"-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d+[,.]\d{2}", text))
+
+
+def _looks_like_document_number(text: str) -> bool:
+    return bool(re.fullmatch(r"\d{3,12}", text.strip()))
+
+
+def _infer_statement_type(description: str, amount: float, balance_delta: float | None) -> str:
+    if balance_delta is not None and abs(abs(balance_delta) - amount) <= 0.02:
+        return "INCOME" if balance_delta > 0 else "EXPENSE"
+
+    desc_norm = _normalize_text(description)
+    income_tokens = (
+        "credito",
+        "credit",
+        "recebido",
+        "recebida",
+        "salario",
+        "deposito",
+        "estorno",
+        "devolucao",
+        "rendimentos",
+        "rendimento",
+        "inss",
+    )
+    expense_tokens = (
+        "debito",
+        "debit",
+        "deb aut",
+        "pagamento",
+        "pgto",
+        "compra",
+        "saque",
+        "tarifa",
+        "iof",
+        "boleto",
+        "darf",
+        "tributo",
+        "fatura",
+    )
+    if any(token in desc_norm for token in income_tokens):
+        return "INCOME"
+    if any(token in desc_norm for token in expense_tokens):
+        return "EXPENSE"
+    return "INCOME" if amount < 0 else "EXPENSE"
+
+
+def _description_from_pdf_record(lines: list[str], amount_text: str) -> str:
+    cleaned_lines: list[str] = []
+    for line in lines:
+        line = re.sub(re.escape(amount_text), " ", line)
+        for match in _money_token_matches(line):
+            line = line.replace(match.group(0), " ")
+        line = re.sub(r"\b(?:docto\.?|documento)\b", " ", line, flags=re.IGNORECASE)
+        line = re.sub(r"\s+", " ", line).strip(" -:;|")
+        if (
+            not line
+            or _looks_like_document_number(line)
+            or _looks_like_date_token(line)
+            or _normalize_text(line)
+            in {"data", "historico", "credito r$", "debito r$", "saldo r$", "total creditos", "total debitos"}
+        ):
+            continue
+        cleaned_lines.append(line)
+
+    if not cleaned_lines:
+        return "Transação bancária"
+
+    joined = " ".join(cleaned_lines)
+    joined = re.sub(r"\b\d{3,12}\b", " ", joined)
+    joined = re.sub(r"\s+", " ", joined).strip(" -:;|")
+    return joined or cleaned_lines[0]
+
+
+def _parse_pdf_record(
+    date_str: str,
+    lines: list[str],
+    previous_balance: float | None,
+) -> tuple[dict[str, Any] | None, float | None]:
+    date = _parse_brazilian_date(date_str)
+    if date is None:
+        return None, previous_balance
+
+    money_values: list[tuple[str, float]] = []
+    for line in lines:
+        for match in _money_token_matches(line):
+            value_text = match.group(0)
+            value = _parse_brazilian_value(value_text)
+            if value is not None:
+                money_values.append((value_text, value))
+
+    if not money_values:
+        return None, previous_balance
+
+    amount_text, amount = money_values[-1]
+    current_balance = previous_balance
+    balance_delta = None
+    if len(money_values) >= 2:
+        amount_text, amount = money_values[-2]
+        current_balance = money_values[-1][1]
+        if previous_balance is not None:
+            balance_delta = current_balance - previous_balance
+
+    if amount == 0:
+        return None, current_balance
+
+    description = _description_from_pdf_record(lines, amount_text)
+    tx_type = _infer_statement_type(description, abs(amount), balance_delta)
+    return (
+        {
+            "date": date,
+            "amount": abs(amount),
+            "type": tx_type,
+            "description": description,
+            "category": _guess_category(description),
+            "raw": " | ".join([date_str, *lines]),
+        },
+        current_balance,
+    )
+
+
+def _parse_pdf_vertical_statement(content: str) -> list[dict[str, Any]]:
+    transactions: list[dict[str, Any]] = []
+    current_date: str | None = None
+    current_lines: list[str] = []
+    previous_balance: float | None = None
+
+    def flush() -> None:
+        nonlocal current_date, current_lines, previous_balance
+        if not current_date:
+            return
+        parsed, balance = _parse_pdf_record(current_date, current_lines, previous_balance)
+        if parsed:
+            transactions.append(parsed)
+        previous_balance = balance
+        current_date = None
+        current_lines = []
+
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if _normalize_text(line).startswith(("total creditos", "documento gerado")):
+            flush()
+            break
+        match = re.match(r"^(\d{2}/\d{2}/\d{4})(?:\s+(.+))?$", line)
+        if match:
+            flush()
+            current_date = match.group(1)
+            current_lines = [match.group(2).strip()] if match.group(2) else []
+            continue
+        if current_date:
+            current_lines.append(line)
+    flush()
+    return transactions
+
+
 def parse_pdf_statement(content: str) -> list[dict[str, Any]]:
     """Tenta extrair transações de texto de PDF de extrato.
 
     Heurística: procura por linhas com data + valor + descrição.
     """
+    vertical_transactions = _parse_pdf_vertical_statement(content)
+    if vertical_transactions:
+        return vertical_transactions
+
     transactions = []
     lines = content.split("\n")
     for line in lines:
         line = line.strip()
         if not line:
             continue
-        match = re.search(r"(\d{2}/\d{2}/\d{4})\s+(.+?)(?:\s+([\d\.,]+)\s*(?:R\$)?)?\s*$", line)
+        match = re.search(r"(\d{2}/\d{2}/\d{4})\s+(.+)$", line)
         if match:
             try:
                 date_str = match.group(1)
                 rest = match.group(2).strip()
-                value_str = match.group(3)
                 date = _parse_brazilian_date(date_str)
                 if date is None:
                     continue
-                if not value_str:
-                    val_match = re.search(r"([\d\.,]+)\s*(?:R\$|BRL)?", rest)
-                    if val_match:
-                        value_str = val_match.group(1)
-                if not value_str:
+                candidate = _extract_money_candidate(rest)
+                if not candidate:
                     continue
+                value_str, value_span = candidate
                 amount = _parse_brazilian_value(value_str)
-                if amount is None:
+                if amount is None or amount == 0:
                     continue
-                desc = re.sub(r"[\d\.,]+\s*(?:R\$|BRL)?", "", rest).strip()
-                desc = re.sub(r"\s+", " ", desc)
-                if not desc:
-                    desc = "Transação bancária"
+                desc = _clean_transaction_description(rest, value_span)
                 tx_type = "INCOME" if amount > 0 else "EXPENSE"
                 transactions.append(
                     {
@@ -375,6 +610,7 @@ def parse_statement(media: dict[str, Any]) -> list[dict[str, Any]]:
         Lista de transações extraídas
     """
     mimetype = media.get("mimetype", "")
+    filename = (media.get("filename") or "").lower()
     data = media.get("data", "")
     if not data:
         return []
@@ -395,6 +631,12 @@ def parse_statement(media: dict[str, Any]) -> list[dict[str, Any]]:
             except ImportError:
                 logger.error("PyPDF2 não instalado")
                 return []
+        elif (
+            "wordprocessingml.document" in mimetype
+            or mimetype == "application/msword"
+            or filename.endswith(".docx")
+        ):
+            content = extract_docx_text(decoded) or ""
         else:
             content = decoded.decode("utf-8", errors="replace")
     except Exception as e:
@@ -411,6 +653,9 @@ def parse_statement(media: dict[str, Any]) -> list[dict[str, Any]]:
     if _is_statement_ofx(content):
         transactions = parse_ofx(content)
         logger.info(f"OFX parseado: {len(transactions)} transações")
+    elif mimetype == "application/pdf" or filename.endswith(".docx"):
+        transactions = parse_pdf_statement(content)
+        logger.info(f"Documento/texto parseado: {len(transactions)} transações")
     elif _is_statement_csv(content):
         # Tenta Nubank primeiro
         if "Identificador" in content and "Descrição" in content:
@@ -419,9 +664,9 @@ def parse_statement(media: dict[str, Any]) -> list[dict[str, Any]]:
         else:
             transactions = parse_generic_csv(content)
             logger.info(f"CSV genérico parseado: {len(transactions)} transações")
-    elif mimetype == "application/pdf" or _is_statement_text(content):
+    elif _is_statement_text(content):
         transactions = parse_pdf_statement(content)
-        logger.info(f"PDF/texto parseado: {len(transactions)} transações")
+        logger.info(f"Documento/texto parseado: {len(transactions)} transações")
     else:
         logger.info("Conteúdo não reconhecido como extrato bancário")
         return []
@@ -457,6 +702,21 @@ def detect_statement(state: dict[str, Any]) -> bool:
         return True
     if filename.endswith((".csv", ".ofx", ".qfx")):
         return True
+    if filename.endswith(".docx"):
+        keywords_in_name = [
+            "extrato",
+            "fatura",
+            "movimento",
+            "conta",
+            "banco",
+            "nubank",
+            "itau",
+            "bradesco",
+            "caixa",
+            "santander",
+        ]
+        if any(k in filename for k in keywords_in_name):
+            return True
     if filename.endswith(".pdf"):
         keywords_in_name = [
             "extrato",

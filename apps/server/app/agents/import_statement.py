@@ -7,11 +7,15 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from app.agents import responses as resp
 from app.agents.persistence import get_or_create_user
 from app.agents.statement_parser import parse_statement
+from app.core.financial_categories import resolve_default_category_name
 from app.db.models.category import Category
+from app.db.models.phone_conversation import PhoneConversation
 from app.db.models.transaction import Transaction
 from app.db.session import sync_session_maker
+from app.services.agent_memory_service import add_memory_event
 
 logger = logging.getLogger(__name__)
 
@@ -62,54 +66,36 @@ def _map_category_to_db(category_name: str) -> str:
         "Doacao": "Doação",
         "Doação": "Doação",
     }
-    return mapping.get(category_name, "Outros")
+    return resolve_default_category_name(mapping.get(category_name, category_name or "Outros"))
 
 
-def import_transactions(state: dict[str, Any]) -> dict[str, Any]:
-    """Importa transações de extrato bancário para o banco de dados.
-
-    Espera que o estado contenha:
-    - phone_number (para buscar/criar usuário)
-    - context.media (com o extrato)
-
-    Retorna:
-    - state atualizado com response, import_summary, imported_count, error
-    """
-    phone_number = state.get("phone_number")
-    media = state.get("context", {}).get("media")
-    error = state.get("error")
-
-    if error:
-        return state
-
-    if not media:
-        state["error"] = "Nenhuma mídia encontrada para importação"
-        return state
-
-    # Parse do extrato
-    transactions = parse_statement(media)
-    if not transactions:
-        state["error"] = (
-            "Não consegui extrair transações do documento. Verifique se é um extrato bancário válido (CSV, OFX ou PDF)."
-        )
-        return state
-
-    logger.info(f"Importando {len(transactions)} transações de extrato para {phone_number}")
-
+def import_parsed_transactions(
+    phone_number: str,
+    transactions: list[dict[str, Any]],
+    *,
+    source_format: str = "statement_import",
+) -> dict[str, Any]:
+    """Persist normalized imported transactions for a linked chat user."""
     db = sync_session_maker()
     try:
         user = get_or_create_user(phone_number, db)
         user_id = user.id
+        conversation = (
+            db.query(PhoneConversation)
+            .filter(PhoneConversation.user_id == user_id)
+            .order_by(PhoneConversation.updated_at.desc())
+            .first()
+        )
 
         imported = 0
         skipped = 0
         errors = []
+        imported_transactions: list[dict[str, Any]] = []
 
         for tx in transactions:
             try:
                 tx_date = datetime.strptime(tx["date"], "%Y-%m-%d")
 
-                # Evita duplicatas por descrição + data + valor
                 existing = (
                     db.query(Transaction)
                     .filter(
@@ -124,7 +110,6 @@ def import_transactions(state: dict[str, Any]) -> dict[str, Any]:
                     skipped += 1
                     continue
 
-                # Busca ou cria a categoria para o usuário
                 cat_name = _map_category_to_db(tx.get("category", "Outros"))
                 category = (
                     db.query(Category)
@@ -160,45 +145,132 @@ def import_transactions(state: dict[str, Any]) -> dict[str, Any]:
                     category_id=category.id,
                     description=tx["description"],
                     transaction_date=tx_date,
-                    source_format="statement_import",
+                    source_format=source_format,
                     raw_input=tx.get("raw", ""),
                 )
                 db.add(db_tx)
+                db.flush()
                 imported += 1
+                imported_transactions.append({
+                    "type": tx["type"].upper(),
+                    "amount": float(tx["amount"]),
+                    "category": cat_name,
+                    "description": tx["description"],
+                    "transaction_date": tx_date,
+                })
+                add_memory_event(
+                    db,
+                    user_id=user_id,
+                    conversation_id=conversation.id if conversation else None,
+                    event_type="transaction_created",
+                    entity_type="transaction",
+                    entity_id=db_tx.id,
+                    source=source_format,
+                    summary=(
+                        f"{tx['type'].upper()} R$ {float(tx['amount']):.2f} "
+                        f"em {cat_name}: {tx['description']}"
+                    ),
+                    payload={
+                        "transaction_id": db_tx.id,
+                        "type": tx["type"].upper(),
+                        "amount": float(tx["amount"]),
+                        "category": cat_name,
+                        "description": tx["description"],
+                        "source_format": source_format,
+                        "transaction_date": tx_date.isoformat(),
+                    },
+                )
             except Exception as e:
                 logger.warning(f"Erro ao importar transação {tx}: {e}")
                 errors.append(str(e))
                 continue
 
+        if imported or skipped:
+            add_memory_event(
+                db,
+                user_id=user_id,
+                conversation_id=conversation.id if conversation else None,
+                event_type="document_import_processed",
+                entity_type="document",
+                source=source_format,
+                summary=f"{imported} transação(ões) importada(s), {skipped} duplicata(s) ignorada(s).",
+                payload={
+                    "source_format": source_format,
+                    "imported_count": imported,
+                    "skipped_count": skipped,
+                    "error_count": len(errors),
+                },
+            )
+
         db.commit()
 
-        state["imported_count"] = imported
-        state["skipped_count"] = skipped
-        state["import_errors"] = errors
-        state["intent"] = "import_statement"
+        return {
+            "imported_count": imported,
+            "skipped_count": skipped,
+            "import_errors": errors,
+            "imported_transactions": imported_transactions,
+            "import_summary": resp.document_imported(
+                imported_transactions,
+                skipped,
+                errors,
+                label="Extrato",
+            ),
+        }
+    finally:
+        db.close()
 
-        # Resumo amigável
-        incomes = [t for t in transactions if t["type"] == "INCOME"]
-        expenses = [t for t in transactions if t["type"] == "EXPENSE"]
-        total_income = sum(t["amount"] for t in incomes)
-        total_expense = sum(t["amount"] for t in expenses)
 
-        state["import_summary"] = (
-            f"Extrato Importado com Sucesso!\n\n"
-            f"{imported} transações importadas\n"
-            f"{skipped} duplicatas ignoradas\n"
-            f"{len(incomes)} receitas (R$ {total_income:,.2f})\n"
-            f"{len(expenses)} despesas (R$ {total_expense:,.2f})\n"
+def import_transactions(state: dict[str, Any]) -> dict[str, Any]:
+    """Importa transações de extrato bancário para o banco de dados.
+
+    Espera que o estado contenha:
+    - phone_number (para buscar/criar usuário)
+    - context.media (com o extrato)
+
+    Retorna:
+    - state atualizado com response, import_summary, imported_count, error
+    """
+    phone_number = state.get("phone_number")
+    media = state.get("context", {}).get("media")
+    error = state.get("error")
+
+    if error:
+        return state
+
+    if not media:
+        state["error"] = "Nenhuma mídia encontrada para importação"
+        return state
+
+    # Parse do extrato
+    transactions = parse_statement(media)
+    if not transactions:
+        state["error"] = (
+            "Não consegui extrair transações do documento. Verifique se é um extrato bancário válido (CSV, OFX ou PDF)."
         )
-        if errors:
-            state["import_summary"] += f"\n{len(errors)} erros menores (ignorados)"
+        return state
 
-        logger.info(f"Importação concluída: {imported} importadas, {skipped} ignoradas")
+    logger.info(f"Importando {len(transactions)} transações de extrato para {phone_number}")
+
+    try:
+        import_result = import_parsed_transactions(
+            phone_number,
+            transactions,
+            source_format="statement_import",
+        )
+        state["imported_count"] = import_result["imported_count"]
+        state["skipped_count"] = import_result["skipped_count"]
+        state["import_errors"] = import_result["import_errors"]
+        state["intent"] = "import_statement"
+        state["import_summary"] = import_result["import_summary"]
+
+        logger.info(
+            "Importação concluída: %s importadas, %s ignoradas",
+            import_result["imported_count"],
+            import_result["skipped_count"],
+        )
 
     except Exception as e:
         logger.error(f"Erro na importação de extrato: {e}", exc_info=True)
         state["error"] = f"Erro ao importar extrato: {e!s}"
-    finally:
-        db.close()
 
     return state

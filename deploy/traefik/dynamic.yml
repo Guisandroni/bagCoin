@@ -1,0 +1,98 @@
+http:
+  routers:
+    # bagcoin-web:
+    #   rule: "Host(`bagcoin.app`)"
+    #   entryPoints:
+    #     - websecure
+    #   service: bagcoin-web
+    #   middlewares:
+    #     - security-headers
+    #   tls:
+    #     certResolver: letsencrypt
+
+    bagcoin-api:
+      rule: "Host(`api.bagcoin.app`)"
+      entryPoints:
+        - websecure
+      service: bagcoin-api
+      middlewares:
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
+    bagcoin-api-docs:
+      rule: "Host(`api.bagcoin.app`) && (PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/api/v1/openapi.json`))"
+      entryPoints:
+        - websecure
+      service: bagcoin-api
+      priority: 100
+      middlewares:
+        - dashboard-auth
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
+    bagcoin-api-admin:
+      rule: "Host(`api.bagcoin.app`) && PathPrefix(`/admin`)"
+      entryPoints:
+        - websecure
+      service: bagcoin-api
+      priority: 100
+      middlewares:
+        - dashboard-auth
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
+    bagcoin-flower:
+      rule: "Host(`flower.bagcoin.app`)"
+      entryPoints:
+        - websecure
+      service: bagcoin-flower
+      middlewares:
+        - dashboard-auth
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
+    bagcoin-traefik:
+      rule: "Host(`traefik.bagcoin.app`)"
+      entryPoints:
+        - websecure
+      service: api@internal
+      middlewares:
+        - dashboard-auth
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    # bagcoin-web:
+    #   loadBalancer:
+    #     servers:
+    #       - url: "http://web:3000"
+
+    bagcoin-api:
+      loadBalancer:
+        servers:
+          - url: "http://app:8000"
+
+    bagcoin-flower:
+      loadBalancer:
+        servers:
+          - url: "http://flower:5555"
+
+  middlewares:
+    dashboard-auth:
+      basicAuth:
+        usersFile: /etc/traefik/usersfile
+
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: strict-origin-when-cross-origin
+        frameDeny: true

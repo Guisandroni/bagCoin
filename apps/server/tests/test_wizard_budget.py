@@ -1,7 +1,7 @@
 """Test battery for the new budget creation wizard workflow.
 
 Tests the full interactive flow:
-  "criar orçamento" → type selection (1/2) → validation → name → value → confirm → execute
+  "criar orçamento" → category name → value → confirm → execute
 """
 
 import pytest
@@ -23,25 +23,18 @@ from app.agents.wizard import (
 class TestSchemaIntegrity:
     """Verify the create_budget schema is correctly defined."""
 
-    def test_budget_type_in_schema(self):
-        """budget_type must be the FIRST field (asked first in wizard)."""
+    def test_budget_schema_is_category_only(self):
+        """Budget wizard must only collect category budgets."""
         schema = WIZARD_SCHEMAS["create_budget"]
-        assert schema["fields"][0] == "budget_type", (
-            f"budget_type must be field[0], got: {schema['fields']}"
-        )
+        assert schema["fields"] == ["name", "total_limit"]
+        assert schema["defaults"]["budget_type"] == "category"
 
-    def test_options_defined(self):
-        """Both options (1=general, 2=category) must be defined."""
-        opts = WIZARD_SCHEMAS["create_budget"]["options"]["budget_type"]
-        assert opts == {"1": "general", "2": "category"}, f"Unexpected options: {opts}"
-
-    def test_option_labels_defined(self):
-        """Option labels must have both 1 and 2 with Portuguese descriptions."""
-        labels = WIZARD_SCHEMAS["create_budget"]["option_labels"]["budget_type"]
-        assert "1" in labels
-        assert "2" in labels
-        assert "Conta" in labels["1"] or "Saldo" in labels["1"]
-        assert "categoria" in labels["2"].lower()
+    def test_account_option_removed(self):
+        """Budget wizard should not offer Conta/Saldo creation."""
+        schema = WIZARD_SCHEMAS["create_budget"]
+        assert "options" not in schema
+        assert "option_labels" not in schema
+        assert not any("Conta" in example or "Saldo" in example for example in schema["examples"])
 
     def test_category_id_nullable(self):
         """category_id must be nullable in model for general-type budgets."""
@@ -127,27 +120,26 @@ class TestOptionPrompt:
 
     def test_first_prompt(self):
         """First prompt should ask 'que tipo' without error prefix."""
-        labels = WIZARD_SCHEMAS["create_budget"]["option_labels"]["budget_type"]
+        labels = {"1": "Limite por categoria"}
         prompt = _build_option_prompt("budget_type", labels, is_retry=False)
         assert "Que tipo" in prompt or "tipo" in prompt.lower()
         assert "Não entendi" not in prompt  # No error prefix
-        assert "Conta" in prompt
         assert "categoria" in prompt.lower()
-        assert "Responda 1 ou 2" in prompt
+        assert "Responda 1" in prompt
 
     def test_retry_prompt(self):
         """Retry prompt should include 'Não entendi' error message."""
-        labels = WIZARD_SCHEMAS["create_budget"]["option_labels"]["budget_type"]
+        labels = {"1": "Limite por categoria"}
         prompt = _build_option_prompt("budget_type", labels, is_retry=True)
         assert "Não entendi" in prompt
         assert "confirmar" in prompt.lower() or "Responda" in prompt
 
-    def test_contains_both_options(self):
-        """Prompt must mention both option 1 and option 2."""
-        labels = WIZARD_SCHEMAS["create_budget"]["option_labels"]["budget_type"]
+    def test_contains_category_option(self):
+        """Prompt can still render generic option menus."""
+        labels = {"1": "Limite por categoria"}
         prompt = _build_option_prompt("budget_type", labels)
         assert "1️⃣" in prompt
-        assert "2️⃣" in prompt
+        assert "categoria" in prompt.lower()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -213,10 +205,10 @@ class TestWizardNodeFlow:
     @patch("app.agents.wizard._save_wizard_state")
     @patch("app.agents.wizard._clear_wizard_state")
     @patch("app.agents.wizard.get_llm")
-    def test_turn1_just_create_budget_shows_options(
+    def test_turn1_just_create_budget_asks_category_and_value(
         self, mock_llm, mock_clear, mock_save, mock_get_conv
     ):
-        """Turn 1: 'criar orçamento' (no data) → shows type selection menu."""
+        """Turn 1: 'criar orçamento' (no data) → asks category and value."""
         mock_get_conv.return_value = None  # No existing wizard
         mock_llm.return_value = None  # No LLM available (fast path)
 
@@ -224,26 +216,25 @@ class TestWizardNodeFlow:
         result = wizard_node(state)
 
         assert result["response"], "Response should not be empty"
-        assert "1️⃣" in result["response"], f"Should show option 1 emoji. Got: {result['response'][:200]}"
-        assert "2️⃣" in result["response"], f"Should show option 2 emoji. Got: {result['response'][:200]}"
-        assert "Responda 1 ou 2" in result["response"]
+        assert "categoria e o valor" in result["response"]
+        assert "valor" in result["response"]
+        assert "Conta" not in result["response"]
 
     @patch("app.agents.wizard._load_wizard_state")
     @patch("app.agents.wizard._save_wizard_state")
     @patch("app.agents.wizard._clear_wizard_state")
     @patch("app.agents.wizard.get_llm")
-    def test_turn2_invalid_option_3_shows_retry(
+    def test_turn2_numeric_text_keeps_collecting(
         self, mock_llm, mock_clear, mock_save, mock_load
     ):
-        """Turn 2: user responds '3' to type selection → retry prompt."""
+        """Turn 2: numeric text without enough data keeps collecting."""
         mock_llm.return_value = None
 
-        # Simulate in-progress wizard waiting for budget_type
         mock_load.return_value = {
             "type": "create_budget",
             "status": "collecting",
             "collected": {},
-            "missing": ["budget_type", "name", "total_limit"],
+            "missing": ["name", "total_limit"],
             "updated_at": "2026-05-01T12:00:00",
         }
 
@@ -251,44 +242,40 @@ class TestWizardNodeFlow:
         result = wizard_node(state)
 
         assert result["response"], "Response should not be empty"
-        assert "Não entendi" in result["response"], (
-            f"Should say 'Não entendi'. Got: {result['response'][:200]}"
-        )
+        assert "categoria do orçamento" in result["response"]
 
     @patch("app.agents.wizard._load_wizard_state")
     @patch("app.agents.wizard._save_wizard_state")
     @patch("app.agents.wizard._clear_wizard_state")
     @patch("app.agents.wizard.get_llm")
-    def test_turn2_invalid_random_text_shows_retry(
+    def test_turn2_random_text_keeps_collecting(
         self, mock_llm, mock_clear, mock_save, mock_load
     ):
-        """Turn 2: user responds 'não sei' → retry prompt (no valid option detected)."""
+        """Turn 2: user responds random text without enough data."""
         mock_llm.return_value = None
 
         mock_load.return_value = {
             "type": "create_budget",
             "status": "collecting",
             "collected": {},
-            "missing": ["budget_type", "name", "total_limit"],
+            "missing": ["name", "total_limit"],
             "updated_at": "2026-05-01T12:00:00",
         }
 
         state = self._base_state("não sei", intent="create_budget")
         result = wizard_node(state)
 
-        assert "Não entendi" in result["response"], (
-            f"Should retry with 'Não entendi'. Got: {result['response'][:200]}"
-        )
+        assert "categoria do orçamento" in result["response"]
 
     @patch("app.agents.wizard._load_wizard_state")
     @patch("app.agents.wizard._save_wizard_state")
     @patch("app.agents.wizard._clear_wizard_state")
     @patch("app.agents.wizard.get_llm")
     @patch("app.agents.wizard._extract_fields_with_llm")
-    def test_turn2_valid_option_1_proceeds_to_name(
+    def test_turn2_category_name_proceeds_to_value(
         self, mock_extract_llm, mock_llm, mock_clear, mock_save, mock_load
     ):
-        """Turn 2: user selects '1' → wizard proceeds to ask for name."""
+        """Turn 2: user sends category name → wizard proceeds to ask for value."""
         mock_llm.return_value = None
         mock_extract_llm.return_value = {}  # No LLM extraction needed
 
@@ -296,19 +283,19 @@ class TestWizardNodeFlow:
             "type": "create_budget",
             "status": "collecting",
             "collected": {},
-            "missing": ["budget_type", "name", "total_limit"],
+            "missing": ["name", "total_limit"],
             "updated_at": "2026-05-01T12:00:00",
         }
 
-        state = self._base_state("1", intent="create_budget")
+        state = self._base_state("Supermercado", intent="create_budget")
         result = wizard_node(state)
 
         assert "Não entendi" not in result.get("response", ""), (
             f"Should NOT show error for valid option. Got: {result['response'][:200]}"
         )
-        # After option, it should ask for remaining fields
-        assert any(w in result.get("response", "").lower() for w in ["nome", "ainda preciso", "já tenho"]), (
-            f"Response should ask for name or remaining fields. Got: {result['response'][:200]}"
+        # After category, it should ask for remaining fields.
+        assert any(w in result.get("response", "").lower() for w in ["valor", "ainda preciso", "já tenho"]), (
+            f"Response should ask for value or remaining fields. Got: {result['response'][:200]}"
         )
 
     @patch("app.agents.wizard._load_wizard_state")
@@ -316,10 +303,10 @@ class TestWizardNodeFlow:
     @patch("app.agents.wizard._clear_wizard_state")
     @patch("app.agents.wizard.get_llm")
     @patch("app.agents.wizard._extract_fields_with_llm")
-    def test_turn2_valid_option_2_proceeds_to_name(
+    def test_category_budget_has_no_type_option_menu(
         self, mock_extract_llm, mock_llm, mock_clear, mock_save, mock_load
     ):
-        """Turn 2: user selects '2' (category) → wizard proceeds."""
+        """Category-only budget wizard does not show Conta/Saldo options."""
         mock_llm.return_value = None
         mock_extract_llm.return_value = {}
 
@@ -327,16 +314,14 @@ class TestWizardNodeFlow:
             "type": "create_budget",
             "status": "collecting",
             "collected": {},
-            "missing": ["budget_type", "name", "total_limit"],
+            "missing": ["name", "total_limit"],
             "updated_at": "2026-05-01T12:00:00",
         }
 
         state = self._base_state("2", intent="create_budget")
         result = wizard_node(state)
 
-        assert "Não entendi" not in result.get("response", ""), (
-            f"Option 2 should be valid. Got: {result['response'][:200]}"
-        )
+        assert "Responda 1 ou 2" not in result.get("response", "")
 
     @patch("app.agents.wizard._load_wizard_state")
     @patch("app.agents.wizard._save_wizard_state")
@@ -366,17 +351,17 @@ class TestWizardNodeFlow:
     @patch("app.agents.wizard._save_wizard_state")
     @patch("app.agents.wizard._clear_wizard_state")
     @patch("app.agents.wizard.get_llm")
-    def test_cancel_at_options_shows_cancel_message(
+    def test_cancel_while_collecting_shows_cancel_message(
         self, mock_llm, mock_clear, mock_save, mock_load
     ):
-        """User types 'cancelar' during option selection → wizard clears."""
+        """User types 'cancelar' during collection → wizard clears."""
         mock_llm.return_value = None
 
         mock_load.return_value = {
             "type": "create_budget",
             "status": "collecting",
             "collected": {},
-            "missing": ["budget_type", "name", "total_limit"],
+            "missing": ["name", "total_limit"],
             "updated_at": "2026-05-01T12:00:00",
         }
 
@@ -459,14 +444,14 @@ class TestExecutionPhase:
 
     @patch("app.services.budget_service.create_budget")
     @patch("app.agents.wizard._clear_wizard_state")
-    def test_execute_general_type(self, mock_clear, mock_create_budget):
-        """When budget_type='general', it should pass through to create_budget."""
+    def test_execute_forces_category_type(self, mock_clear, mock_create_budget):
+        """Even stale general wizard state is forced to category."""
         from app.agents.wizard import _handle_executing
 
         mock_create_budget.return_value = {
-            "id": 1, "name": "Itau", "category_id": None,
-            "category_name": None, "total_limit": 5000.0,
-            "period": "monthly", "budget_type": "general",
+            "id": 1, "name": "Itau", "category_id": 5,
+            "category_name": "Itau", "total_limit": 5000.0,
+            "period": "monthly", "budget_type": "category",
         }
 
         wizard = {
@@ -482,10 +467,9 @@ class TestExecutionPhase:
         state = {"message": "", "phone_number": "5511999999999", "response": ""}
         result = _handle_executing(state, wizard, "5511999999999")
 
-        # Check create_budget was called with budget_type='general'
         call_kwargs = mock_create_budget.call_args.kwargs
-        assert call_kwargs["budget_type"] == "general", f"Expected general, got {call_kwargs}"
-        assert "Conta" in result["response"]
+        assert call_kwargs["budget_type"] == "category", f"Expected category, got {call_kwargs}"
+        assert result["response"] == "✅ Orçamento criado com sucesso!"
 
     @patch("app.services.budget_service.create_budget")
     @patch("app.agents.wizard._clear_wizard_state")
@@ -514,4 +498,4 @@ class TestExecutionPhase:
 
         call_kwargs = mock_create_budget.call_args.kwargs
         assert call_kwargs["budget_type"] == "category", f"Expected category, got {call_kwargs}"
-        assert "Orçamento" in result["response"]
+        assert result["response"] == "✅ Orçamento criado com sucesso!"

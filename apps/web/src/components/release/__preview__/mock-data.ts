@@ -5,6 +5,7 @@ import type {
   ReleaseTransaction,
   ReleaseCategory,
   ReleaseReport,
+  ReleaseReportAnalytics,
   ReleaseProfile,
   ReleaseNavItem,
 } from "@/components/release/types"
@@ -35,7 +36,7 @@ export const mockDashboardSummary: ReleaseDashboardSummary = {
       name: "Supermercado",
       category: "alimentacao",
       categoryIcon: "🛒",
-      amount: -124.5,
+      amount: 124.5,
       date: "Hoje, 10:45",
       type: "despesa",
     },
@@ -44,7 +45,7 @@ export const mockDashboardSummary: ReleaseDashboardSummary = {
       name: "Jantar",
       category: "alimentacao",
       categoryIcon: "🍽️",
-      amount: -85.0,
+      amount: 85.0,
       date: "Ontem, 20:00",
       type: "despesa",
     },
@@ -62,20 +63,24 @@ export const mockDashboardSummary: ReleaseDashboardSummary = {
       name: "Amazon",
       category: "compras",
       categoryIcon: "🛍️",
-      amount: -145.99,
+      amount: 145.99,
       date: "12 Mai, 14:30",
       type: "despesa",
     },
   ],
   categoryBreakdown: [
-    { name: "Moradia", percentage: 45, color: "bg-[var(--rls-primary-container)]" },
-    { name: "Alimentação", percentage: 25, color: "bg-[var(--rls-secondary-container)]" },
-    { name: "Transporte", percentage: 15, color: "bg-[var(--rls-tertiary-container)]" },
-    { name: "Lazer", percentage: 15, color: "bg-[var(--rls-outline)]" },
+    { name: "Moradia", percentage: 45, amount: 1200, color: "#7B1FA2", emoji: "🏠" },
+    { name: "Alimentação", percentage: 25, amount: 680, color: "#FF6D00", emoji: "🍽️" },
+    { name: "Transporte", percentage: 15, amount: 410, color: "#0057FF", emoji: "🚗" },
+    { name: "Lazer", percentage: 15, amount: 390, color: "#D500F9", emoji: "🎬" },
   ],
   goals: [
     { name: "Reserva de Emergência", current: 4200, target: 5000, percentage: 84 },
     { name: "Mercado Mensal", current: 320, target: 600, percentage: 53 },
+  ],
+  budgets: [
+    { name: "Alimentação", spent: 800, total: 1000, remaining: 200, percentage: 80 },
+    { name: "Transporte", spent: 380, total: 400, remaining: 20, percentage: 95 },
   ],
 }
 
@@ -117,6 +122,7 @@ export const mockBudgets: ReleaseBudget[] = [
     total: 1000,
     remaining: 200,
     percentage: 80,
+    budgetDate: "2026-05-23",
   },
   {
     id: "2",
@@ -127,6 +133,7 @@ export const mockBudgets: ReleaseBudget[] = [
     total: 400,
     remaining: 20,
     percentage: 95,
+    budgetDate: "2026-05-23",
   },
   {
     id: "3",
@@ -137,6 +144,7 @@ export const mockBudgets: ReleaseBudget[] = [
     total: 500,
     remaining: 300,
     percentage: 40,
+    budgetDate: "2026-05-23",
   },
   {
     id: "4",
@@ -147,6 +155,7 @@ export const mockBudgets: ReleaseBudget[] = [
     total: 500,
     remaining: 150,
     percentage: 70,
+    budgetDate: "2026-05-23",
   },
 ]
 
@@ -156,7 +165,7 @@ export const mockTransactions: ReleaseTransaction[] = [
     name: "Starbucks",
     category: "alimentacao",
     categoryIcon: "☕",
-    amount: -12.5,
+    amount: 12.5,
     date: "Hoje",
     type: "despesa",
   },
@@ -165,7 +174,7 @@ export const mockTransactions: ReleaseTransaction[] = [
     name: "Uber",
     category: "transporte",
     categoryIcon: "🚕",
-    amount: -24.0,
+    amount: 24.0,
     date: "Hoje",
     type: "despesa",
   },
@@ -183,7 +192,7 @@ export const mockTransactions: ReleaseTransaction[] = [
     name: "Amazon",
     category: "compras",
     categoryIcon: "🛍️",
-    amount: -145.99,
+    amount: 145.99,
     date: "Ontem",
     type: "despesa",
   },
@@ -192,7 +201,7 @@ export const mockTransactions: ReleaseTransaction[] = [
     name: "Netflix",
     category: "lazer",
     categoryIcon: "🎬",
-    amount: -15.49,
+    amount: 15.49,
     date: "Ontem",
     type: "despesa",
   },
@@ -232,3 +241,28 @@ export const mockReports: ReleaseReport[] = [
     type: "anual",
   },
 ]
+
+export const mockReportAnalytics: ReleaseReportAnalytics = {
+  balance: 5210,
+  income: 8450,
+  expenses: 3240,
+  categoryExpenses: [
+    { name: "Moradia", amount: 1500, color: "#1652f0" },
+    { name: "Alimentação", amount: 920, color: "#ff9500" },
+    { name: "Transporte", amount: 480, color: "#3b82f6" },
+  ],
+  monthlyExpenses: [
+    { label: "maio de 2026", amount: 3240 },
+    { label: "abril de 2026", amount: 2870 },
+    { label: "março de 2026", amount: 3010 },
+  ],
+  weeklyExpenses: [
+    { label: "03 mai - 09 mai", amount: 1220 },
+    { label: "26 abr - 02 mai", amount: 860 },
+  ],
+  dailyExpenses: [
+    { label: "09 mai", amount: 420 },
+    { label: "08 mai", amount: 180 },
+    { label: "07 mai", amount: 620 },
+  ],
+}

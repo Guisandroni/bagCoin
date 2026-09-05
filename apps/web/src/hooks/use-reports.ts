@@ -1,7 +1,7 @@
 "use client"
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { api } from "@/lib/api-client"
+import apiClient, { api } from "@/lib/api-client"
 import { toast } from "sonner"
 
 export interface Report {
@@ -68,7 +68,7 @@ export function useCreateReport() {
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_CREATE_REPORT)
       console.error('[hook:reports]', err)
-      toast.error(err.message || "Erro ao gerar relatório", { id: TOAST_ID_CREATE_REPORT })
+      toast.error("Não foi possível gerar o relatório. Tente novamente.", { id: TOAST_ID_CREATE_REPORT })
     },
   })
 }
@@ -88,7 +88,7 @@ export function useDeleteReport() {
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_DELETE_REPORT)
       console.error('[hook:reports]', err)
-      toast.error(err.message || "Erro ao excluir relatório", { id: TOAST_ID_DELETE_REPORT })
+      toast.error("Não foi possível excluir o relatório. Tente novamente.", { id: TOAST_ID_DELETE_REPORT })
     },
   })
 }
@@ -98,11 +98,10 @@ const TOAST_ID_DOWNLOAD_REPORT = "reports-download"
 export function useDownloadReport() {
   return useMutation({
     mutationFn: async (reportId: number) => {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
-      const url = `${apiBase}/bagcoin/reports/${reportId}/download`
-      const res = await fetch(url, { credentials: "include" })
-      if (!res.ok) throw new Error("Erro ao baixar relatório")
-      return res.blob()
+      const { data } = await apiClient.get(`/bagcoin/reports/${reportId}/download`, {
+        responseType: "blob",
+      })
+      return data as Blob
     },
     onSuccess: (blob, reportId) => {
       toast.dismiss(TOAST_ID_DOWNLOAD_REPORT)
@@ -113,7 +112,7 @@ export function useDownloadReport() {
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_DOWNLOAD_REPORT)
       console.error('[hook:reports]', err)
-      toast.error(err.message || "Erro ao baixar relatório", { id: TOAST_ID_DOWNLOAD_REPORT })
+      toast.error("Não foi possível baixar o relatório. Tente novamente.", { id: TOAST_ID_DOWNLOAD_REPORT })
     },
   })
 }

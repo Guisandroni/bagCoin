@@ -1,8 +1,6 @@
 """CreditCard Pydantic schemas."""
 
 from datetime import datetime
-from uuid import UUID
-
 from pydantic import Field
 
 from app.schemas.base import BaseSchema, TimestampSchema
@@ -41,7 +39,7 @@ class CreditCardUpdate(BaseSchema):
 class CreditCardResponse(CreditCardBase, TimestampSchema):
     """Schema for reading a credit card."""
 
-    id: UUID
-    user_id: UUID
+    id: int
+    user_id: int
     created_at: datetime
     updated_at: datetime | None = None

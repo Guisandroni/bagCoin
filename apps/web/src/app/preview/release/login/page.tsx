@@ -1,14 +1,11 @@
 "use client"
 
-import { LoginCard } from "@/components/release"
+import dynamic from "next/dynamic"
+
+const LoginPreviewClient = dynamic(() => import("./login-preview-client"), {
+  ssr: false,
+})
 
 export default function LoginPreview() {
-  return (
-    <LoginCard
-      onLogin={() => {}}
-      onGoogleLogin={() => {}}
-      onRegisterClick={() => {}}
-      onForgotPassword={() => {}}
-    />
-  )
+  return <LoginPreviewClient />
 }

@@ -1,48 +1,74 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { RelatoriosClient } from "@/app/app/relatorios/relatorios-client"
+import { render, screen, fireEvent } from "@testing-library/react"
+import { RelatoriosClient, buildReportAnalytics } from "@/app/app/relatorios/relatorios-client"
 import RelatoriosLoading from "@/app/app/relatorios/loading"
-import type { ReleaseReport } from "@/components/release/types"
-import type { ReactNode } from "react"
+import type { ServerTransaction, TransactionSummary } from "@/lib/api-server"
 
-function createWrapper() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
-  }
+const mockToggleDrawer = vi.fn()
+
+const summary: TransactionSummary = {
+  balance: 2500,
+  total_income: 6500,
+  total_expenses: 4000,
+  transaction_count: 3,
+  categories: [
+    { name: "Alimentação", amount: 900, color: "#ff9500" },
+    { name: "Transporte", amount: 300, color: "#1652f0" },
+  ],
+  recent_transactions: [],
 }
 
-const mockReports: ReleaseReport[] = [
+const transactions: ServerTransaction[] = [
   {
     id: "1",
-    name: "Relatório 2026-04",
-    period: "2026-04",
-    date: "01/05/2026",
-    status: "concluido",
-    type: "mensal",
+    type: "EXPENSE",
+    name: "Supermercado",
+    category: "Alimentação",
+    amount: 900,
+    date: "09 mai",
+    transaction_date: "2026-05-09",
+    source: "manual",
+    status: "confirmed",
   },
   {
     id: "2",
-    name: "Relatório 2026-03",
-    period: "2026-03",
-    date: "01/04/2026",
-    status: "pendente",
-    type: "mensal",
+    type: "EXPENSE",
+    name: "Uber",
+    category: "Transporte",
+    amount: 300,
+    date: "02 mai",
+    transaction_date: "2026-05-02",
+    source: "manual",
+    status: "confirmed",
+  },
+  {
+    id: "3",
+    type: "INCOME",
+    name: "Salário",
+    category: "Salário",
+    amount: 6500,
+    date: "01 mai",
+    transaction_date: "2026-05-01",
+    source: "manual",
+    status: "confirmed",
   },
 ]
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/app/relatorios",
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+vi.mock("@/lib/store", () => ({
+  useAppStore: (selector?: (state: { toggleDrawer: typeof mockToggleDrawer }) => unknown) => {
+    const state = { toggleDrawer: mockToggleDrawer }
+    return selector ? selector(state) : state
+  },
 }))
 
-vi.mock("@/lib/api-client", () => ({
-  default: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
-  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
-  getTokenStore: () => ({ getAccessToken: () => null }),
-  setAuthCookies: () => {},
-  clearAuthCookies: () => {},
+vi.mock("@/hooks/use-reports", () => ({
+  useReports: () => ({ data: { items: [] }, isLoading: false }),
+  useCreateReport: () => ({ mutate: vi.fn(), isPending: false }),
+  useDownloadReport: () => ({ mutate: vi.fn(), isPending: false }),
+}))
+
+vi.mock("@/hooks/use-transactions", () => ({
+  useExportTransactionsCsv: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
 describe("RelatoriosLoading", () => {
@@ -57,20 +83,40 @@ describe("RelatoriosClient", () => {
     vi.clearAllMocks()
   })
 
-  it("renderiza lista de relatórios com dados", () => {
-    render(<RelatoriosClient reports={mockReports} />, { wrapper: createWrapper() })
-    expect(screen.getByText("Relatório 2026-04")).toBeInTheDocument()
-    expect(screen.getByText("Relatório 2026-03")).toBeInTheDocument()
+  it("renderiza relatórios gráficos sem PDF e sem navbar", () => {
+    const { container } = render(<RelatoriosClient summary={summary} transactions={transactions} />)
+
+    expect(screen.getByText("Relatórios")).toBeInTheDocument()
+    expect(screen.getByText("Maiores gastos por categoria")).toBeInTheDocument()
+    expect(screen.getByText("Gastos por mês")).toBeInTheDocument()
+    expect(screen.getByText("Gastos por semana")).toBeInTheDocument()
+    expect(screen.getByText("Gastos por dia")).toBeInTheDocument()
+    expect(screen.queryByText("Download PDF")).not.toBeInTheDocument()
+    expect(container.querySelector("nav")).not.toBeInTheDocument()
   })
 
-  it("exibe status correto dos relatórios", () => {
-    render(<RelatoriosClient reports={mockReports} />, { wrapper: createWrapper() })
-    expect(screen.getByText("Concluído")).toBeInTheDocument()
-    expect(screen.getByText("Pendente")).toBeInTheDocument()
+  it("alterna drawer pelo header sem botão de início", () => {
+    render(<RelatoriosClient summary={summary} transactions={transactions} />)
+
+    fireEvent.click(screen.getByLabelText("Abrir menu"))
+    expect(mockToggleDrawer).toHaveBeenCalled()
+    expect(screen.queryByLabelText("Início")).not.toBeInTheDocument()
   })
 
-  it("renderiza empty state quando não há relatórios", () => {
-    render(<RelatoriosClient reports={[]} />, { wrapper: createWrapper() })
-    expect(screen.getByText("Relatórios Financeiros")).toBeInTheDocument()
+  it("agrega gastos por período usando apenas despesas", () => {
+    const analytics = buildReportAnalytics(summary, transactions.map((tx) => ({
+      id: tx.id,
+      name: tx.name,
+      category: tx.category ?? "",
+      categoryIcon: "",
+      amount: tx.amount,
+      date: tx.date ?? "",
+      transactionDate: tx.transaction_date,
+      type: tx.type === "INCOME" ? "receita" : "despesa",
+    })))
+
+    expect(analytics.categoryExpenses[0]).toMatchObject({ name: "Alimentação", amount: 900 })
+    expect(analytics.monthlyExpenses[0]).toMatchObject({ label: "maio de 2026", amount: 1200 })
+    expect(analytics.dailyExpenses[0]).toMatchObject({ amount: 900 })
   })
 })

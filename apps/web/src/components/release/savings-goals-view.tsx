@@ -1,18 +1,22 @@
 "use client"
 
-import { ArrowLeft, Plus } from "lucide-react"
-import { AppBar } from "./app-bar"
+import { BottomNavBar } from "./bottom-nav-bar"
+import { FunctionHeader } from "./function-header"
 import { InfoCard } from "./info-card"
-import type { ReleaseGoal } from "./types"
+import type { ReleaseGoal, ReleaseNavItem } from "./types"
 import { CategoryIcon } from "@/lib/category"
+import { formatCurrency, formatPercent } from "./format"
+import { cn } from "@/lib/utils"
 
 interface SavingsGoalsViewProps {
   goals: ReleaseGoal[]
   totalCurrent: number
   totalTarget: number
   globalPercentage: number
-  onBack?: () => void
   onAddGoal?: () => void
+  onSelectGoal?: (goal: ReleaseGoal) => void
+  navItems?: ReleaseNavItem[]
+  onNavigate?: (href: string) => void
 }
 
 export function SavingsGoalsView({
@@ -20,18 +24,24 @@ export function SavingsGoalsView({
   totalCurrent,
   totalTarget,
   globalPercentage,
-  onBack,
   onAddGoal,
+  onSelectGoal,
+  navItems,
+  onNavigate,
 }: SavingsGoalsViewProps) {
   return (
-    <div className="rls min-h-screen bg-[var(--rls-background)]">
-      <AppBar title="Minhas Metas" onBack={onBack} />
+    <div className="rls mx-auto min-h-dvh w-full max-w-md bg-[var(--rls-background)] shadow-[0_0_48px_rgba(22,82,240,0.08)]">
+      <FunctionHeader
+        title="Metas"
+        actionLabel="Adicionar Meta"
+        onAction={onAddGoal ?? (() => {})}
+      />
 
-      <main className="px-[var(--rls-container-margin)] flex flex-col gap-[var(--rls-stack-gap-lg)] pt-[var(--rls-stack-gap-md)] pb-32">
+      <main className="px-[var(--rls-container-margin)] flex flex-col gap-[var(--rls-stack-gap-lg)] pt-[var(--rls-stack-gap-md)] pb-[120px]">
         {/* Summary Card */}
         <InfoCard
           title="Total em Metas"
-          value={`R$ ${totalCurrent.toLocaleString("pt-BR")}`}
+          value={formatCurrency(totalCurrent)}
           variant="default"
         >
           {/* Circular Progress */}
@@ -63,12 +73,12 @@ export function SavingsGoalsView({
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
                 <span className="rls-text-title-lg text-[var(--rls-primary-container)]">
-                  {globalPercentage}%
+                  {formatPercent(globalPercentage)}%
                 </span>
               </div>
             </div>
             <span className="rls-text-body-md text-[var(--rls-on-surface-variant)] px-3 py-1 bg-[var(--rls-primary-container)]/10 rounded-[var(--rls-radius-pill)] text-[var(--rls-primary-container)]">
-              R$ {totalTarget.toLocaleString("pt-BR")} Alvo Global
+              {formatCurrency(totalTarget)} Alvo Global
             </span>
           </div>
         </InfoCard>
@@ -76,59 +86,97 @@ export function SavingsGoalsView({
         {/* Goals List */}
         <div className="flex flex-col gap-[var(--rls-stack-gap-md)]">
           {goals.map((goal) => {
-            const percentage = Math.round((goal.current / goal.target) * 100)
+            const percentage = goal.target > 0 ? Math.round((goal.current / goal.target) * 100) : 0
+            const tone = getGoalTone(goal, percentage)
+            const statusLabel = getGoalStatusLabel(goal.status, percentage)
             return (
-              <div
+              <button
+                type="button"
+                onClick={() => onSelectGoal?.(goal)}
                 key={goal.id}
-                className="bg-[var(--rls-surface-container-lowest)] p-[var(--rls-inline-padding-md)] rounded-[var(--rls-radius-lg)] shadow-sm flex flex-col gap-2"
+                className="bg-[var(--rls-surface-container-lowest)] p-[var(--rls-inline-padding-md)] rounded-[var(--rls-radius-lg)] shadow-sm flex flex-col gap-2 text-left"
               >
                 <div className="flex justify-between items-end">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-[var(--rls-surface-container)] flex items-center justify-center">
-                      <CategoryIcon name={goal.category} size={24} />
+                    <div className="flex items-center gap-3">
+                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", tone.iconBg)}>
+                      <CategoryIcon name={goal.category} size={24} className={tone.icon} />
                     </div>
                     <div className="flex flex-col">
                       <span className="rls-text-body-lg text-[var(--rls-on-surface)]">
                         {goal.name}
                       </span>
                       <span className="rls-text-body-md text-[var(--rls-on-surface-variant)]">
-                        R$ {goal.current.toLocaleString("pt-BR")} / R${" "}
-                        {goal.target.toLocaleString("pt-BR")}
+                        {formatCurrency(goal.current)} / {formatCurrency(goal.target)}
                       </span>
                     </div>
                   </div>
-                  <span
-                    className={`rls-text-label-lg px-2 py-0.5 rounded-[var(--rls-radius-pill)] ${
-                      percentage >= 80
-                        ? "bg-[var(--rls-primary-container)]/10 text-[var(--rls-primary-container)]"
-                        : "bg-[var(--rls-surface-container-high)] text-[var(--rls-on-surface-variant)]"
-                    }`}
-                  >
-                    {percentage}%
-                  </span>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span
+                      className={cn(
+                        "rls-text-label-lg rounded-[var(--rls-radius-pill)] px-2 py-0.5",
+                        tone.badge
+                      )}
+                    >
+                      {formatPercent(percentage)}%
+                    </span>
+                    <span
+                      className={cn(
+                        "rls-text-label-md rounded-[var(--rls-radius-pill)] px-2 py-0.5",
+                        tone.badge
+                      )}
+                    >
+                      {statusLabel}
+                    </span>
+                  </div>
                 </div>
                 <div className="w-full h-2 bg-[var(--rls-surface-container-high)] rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-[var(--rls-primary-container)] rounded-full transition-all"
+                    className={cn("h-full rounded-full transition-all", tone.bar)}
                     style={{ width: `${Math.min(percentage, 100)}%` }}
                   />
                 </div>
-              </div>
+              </button>
             )
           })}
         </div>
       </main>
 
-      {/* Fixed Bottom CTA */}
-      <div className="fixed bottom-0 left-0 right-0 p-[var(--rls-container-margin)] bg-gradient-to-t from-[var(--rls-background)] via-[var(--rls-background)] to-transparent pt-12">
-        <button
-          onClick={onAddGoal}
-          className="w-full h-14 bg-[var(--rls-primary-container)] text-white rls-text-title-lg rounded-[var(--rls-radius-pill)] hover:bg-[var(--rls-primary)] transition-colors active:scale-[0.98] shadow-md shadow-[var(--rls-primary-container)]/20 flex items-center justify-center gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          Adicionar Nova Meta
-        </button>
-      </div>
+      {navItems && onNavigate ? (
+        <BottomNavBar items={navItems} onNavigate={onNavigate} />
+      ) : null}
     </div>
   )
+}
+
+function getGoalStatusLabel(status: ReleaseGoal["status"], percentage: number): string {
+  if (status === "cancelled") return "Cancelada"
+  if (status === "completed" || percentage >= 100) return "Concluída"
+  return "Ativa"
+}
+
+function getGoalTone(goal: ReleaseGoal, percentage: number) {
+  if (goal.status === "cancelled") {
+    return {
+      iconBg: "bg-[var(--rls-error-container)]",
+      icon: "text-[var(--rls-error)]",
+      badge: "bg-[var(--rls-error-container)] text-[var(--rls-error)]",
+      bar: "bg-[var(--rls-error)]",
+    }
+  }
+
+  if (goal.status === "completed" || percentage >= 100) {
+    return {
+      iconBg: "bg-[var(--rls-secondary-container)]",
+      icon: "text-[var(--rls-secondary)]",
+      badge: "bg-[var(--rls-secondary-container)] text-[var(--rls-secondary)]",
+      bar: "bg-[var(--rls-secondary)]",
+    }
+  }
+
+  return {
+    iconBg: "bg-[var(--rls-surface-container)]",
+    icon: "text-[var(--rls-primary-container)]",
+    badge: "bg-[var(--rls-primary-container)]/10 text-[var(--rls-primary-container)]",
+    bar: "bg-[var(--rls-primary-container)]",
+  }
 }

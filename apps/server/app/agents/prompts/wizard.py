@@ -6,6 +6,7 @@ Extracted from app.agents.wizard._extract_fields_with_llm() and _extract_correct
 # Default JSON format examples per wizard type
 FIELD_EXAMPLES: dict[str, str] = {
     "create_budget": '{"name": "alimentação", "total_limit": 3000, "period": "monthly"}',
+    "update_budget": '{"name": "combustível", "total_limit": 200}',
     "create_goal": '{"title": "viagem", "target_amount": 10000, "deadline": "12/2026"}',
     "update_goal": '{"goal_identifier": "bike", "amount": 500}',
     "contribute_goal": '{"goal_identifier": "bike", "amount": 500}',
@@ -25,12 +26,15 @@ Regras:
 - total_limit, target_amount, amount: números apenas (ex: 3000, 10000.50)
 - deadline: string no formato "MM/YYYY" ou "DD/MM/YYYY"
 - name/title: string, sem incluir o valor monetário
-- period: "monthly", "weekly", "daily" ou "yearly"
+- Para create_budget, period deve ser sempre "monthly"; orçamento não tem descrição.
 - goal_identifier: nome da meta ou número dela
 
 Exemplos de extração:
 Mensagem: "Orçamento de R$ 3000 para alimentação mensal"
 → {{"name": "alimentação", "total_limit": 3000, "period": "monthly"}}
+
+Mensagem: "alimentação 4000"
+→ {{"name": "alimentação", "total_limit": 4000, "period": "monthly"}}
 
 Mensagem: "Meta de R$ 10000 para viagem até 12/2026"
 → {{"title": "viagem", "target_amount": 10000, "deadline": "12/2026"}}

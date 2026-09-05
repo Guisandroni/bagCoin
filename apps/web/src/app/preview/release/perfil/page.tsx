@@ -8,8 +8,6 @@ export default function PerfilPreview() {
     <ProfileView
       profile={mockProfile}
       onBack={() => {}}
-      onChangePassword={() => {}}
-      onSave={() => {}}
     />
   )
 }

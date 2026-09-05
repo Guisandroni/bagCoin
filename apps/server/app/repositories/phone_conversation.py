@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.db.models.phone_conversation import PhoneConversation
+from app.db.models.conversation_message import ConversationMessage
 
 
 async def get_by_id(db: AsyncSession, conv_id: int) -> PhoneConversation | None:
@@ -115,6 +116,16 @@ async def save_message(
     )
     conv.message_history = history[-max_history:]
     flag_modified(conv, "message_history")
+    db.add(
+        ConversationMessage(
+            conversation_id=conv.id,
+            user_id=conv.user_id,
+            channel=conv.channel,
+            role=role,
+            content=content,
+            message_metadata={"source": "repository"},
+        )
+    )
     await db.flush()
     await db.refresh(conv)
     return conv
@@ -127,9 +138,26 @@ async def get_message_history(
 ) -> list[dict]:
     """Get recent message history for a user."""
     conv = await get_last_by_user(db, user_id)
-    if not conv or not conv.message_history:
+    if not conv:
         return []
-    return conv.message_history[-limit:]
+    result = await db.execute(
+        select(ConversationMessage)
+        .where(ConversationMessage.conversation_id == conv.id)
+        .order_by(ConversationMessage.created_at.desc(), ConversationMessage.id.desc())
+        .limit(limit)
+    )
+    messages = list(reversed(result.scalars().all()))
+    if messages:
+        return [
+            {
+                "role": msg.role,
+                "content": msg.content,
+                "timestamp": msg.created_at.isoformat() if msg.created_at else None,
+                "metadata": msg.message_metadata or {},
+            }
+            for msg in messages
+        ]
+    return (conv.message_history or [])[-limit:]
 
 
 async def update_intent(

@@ -20,4 +20,4 @@ class FileInfo(FileUploadResponse):
     """Full file metadata."""
 
     created_at: datetime
-    user_id: UUID
+    user_id: int

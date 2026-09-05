@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports */
 import { vi, beforeAll, afterEach, afterAll } from "vitest"
 import { server } from "./setup"
 

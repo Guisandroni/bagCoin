@@ -1,22 +1,20 @@
 """CreditCard repository (PostgreSQL async)."""
 
 from typing import Any
-from uuid import UUID
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.credit_card import CreditCard
 
 
-async def get_by_id(db: AsyncSession, card_id: UUID) -> CreditCard | None:
+async def get_by_id(db: AsyncSession, card_id: int) -> CreditCard | None:
     """Get credit card by ID."""
     return await db.get(CreditCard, card_id)
 
 
 async def get_multi_by_user(
     db: AsyncSession,
-    user_id: UUID,
+    user_id: int,
     *,
     skip: int = 0,
     limit: int = 50,
@@ -34,7 +32,7 @@ async def get_multi_by_user(
 async def create(
     db: AsyncSession,
     *,
-    user_id: UUID,
+    user_id: int,
     name: str,
     issuer: str,
     limit: float,
@@ -75,7 +73,7 @@ async def update(
     return db_card
 
 
-async def delete(db: AsyncSession, card_id: UUID) -> CreditCard | None:
+async def delete(db: AsyncSession, card_id: int) -> CreditCard | None:
     """Delete a credit card by ID."""
     card = await get_by_id(db, card_id)
     if card:

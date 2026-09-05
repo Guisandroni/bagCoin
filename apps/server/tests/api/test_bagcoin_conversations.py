@@ -16,7 +16,7 @@ class MockUser:
     """Mock authenticated user."""
 
     def __init__(self):
-        self.id = uuid4()
+        self.id = 1
         self.email = "test@example.com"
         self.full_name = "Test User"
         self.is_active = True
@@ -63,15 +63,15 @@ def _mock_user_with_phone(phone: str = "+5511999999999") -> MagicMock:
     return user
 
 
-def _mock_phone_user(phone_user_id: int = 42) -> MagicMock:
-    """Return a mock execute result for the PhoneUser id query."""
+def _mock_user(user_id: int = 42) -> MagicMock:
+    """Return a mock execute result for the PhoneUnified user id query."""
     result = MagicMock()
-    result.scalar_one_or_none.return_value = phone_user_id
+    result.scalar_one_or_none.return_value = user_id
     return result
 
 
-def _mock_empty_phone_user() -> MagicMock:
-    """Return a mock execute result where no PhoneUser exists."""
+def _mock_empty_user() -> MagicMock:
+    """Return a mock execute result where no unified user exists."""
     result = MagicMock()
     result.scalar_one_or_none.return_value = None
     return result
@@ -89,6 +89,23 @@ def _mock_conversation(**kwargs) -> MagicMock:
     return conv
 
 
+def _mock_message(**kwargs) -> MagicMock:
+    """Return a mock ConversationMessage ORM object."""
+    msg = MagicMock()
+    msg.role = kwargs.get("role", "user")
+    msg.content = kwargs.get("content", "message")
+    msg.created_at = kwargs.get("created_at", datetime.now(UTC))
+    msg.message_metadata = kwargs.get("message_metadata", {})
+    return msg
+
+
+def _mock_count(value: int) -> MagicMock:
+    """Return a mock count query result."""
+    result = MagicMock()
+    result.scalar.return_value = value
+    return result
+
+
 def _mock_transaction(**kwargs) -> MagicMock:
     """Return a mock Transaction ORM object."""
     tx = MagicMock()
@@ -101,14 +118,14 @@ def _mock_transaction(**kwargs) -> MagicMock:
     tx.transaction_date = kwargs.get("transaction_date", datetime.now(UTC))
     tx.raw_input = kwargs.get("raw_input", None)
     tx.confidence_score = kwargs.get("confidence_score", 0.5)
-    tx.user_uuid = kwargs.get("user_uuid", uuid4())
+    tx.user_id = kwargs.get("user_id", 1)
     tx.created_at = kwargs.get("created_at", datetime.now(UTC))
     tx.updated_at = kwargs.get("updated_at", datetime.now(UTC))
     return tx
 
 
 def _make_user_query_result(user: MagicMock | None) -> MagicMock:
-    """Return a mock execute result for the User query in _get_phone_user_id."""
+    """Return a mock execute result for the User query in _get_user_id."""
     result = MagicMock()
     result.scalar_one_or_none.return_value = user
     return result
@@ -157,10 +174,11 @@ async def test_confirm_message_requires_auth(client):
 
 
 @pytest.mark.anyio
-async def test_list_conversations_empty_no_phone_user(client_with_auth, mock_db_session):
-    """Test listing conversations when user has no PhoneUser (no phone linked)."""
+async def test_list_conversations_empty_no_user(client_with_auth, mock_db_session):
+    """Test listing conversations when user has no unified user (no phone linked)."""
+    merged_result = _mock_empty_user()
     user_result = _make_user_query_result(None)
-    mock_db_session.execute = AsyncMock(return_value=user_result)
+    mock_db_session.execute = AsyncMock(side_effect=[merged_result, user_result])
 
     response = await client_with_auth.get(
         f"{settings.API_V1_STR}/bagcoin/conversations"
@@ -174,14 +192,15 @@ async def test_list_conversations_empty_no_phone_user(client_with_auth, mock_db_
 async def test_list_conversations_empty_no_convs(client_with_auth, mock_db_session):
     """Test listing conversations when user has no conversations."""
     mock_user_orm = _mock_user_with_phone()
+    merged_result = _mock_empty_user()
     user_result = _make_user_query_result(mock_user_orm)
-    phone_user_result = _mock_phone_user(phone_user_id=42)
+    user_result = _mock_user(user_id=42)
 
     conv_result = MagicMock()
     conv_result.scalars.return_value.all.return_value = []
 
     mock_db_session.execute = AsyncMock(
-        side_effect=[user_result, phone_user_result, conv_result]
+        side_effect=[merged_result, user_result, user_result, conv_result, _mock_count(1), _mock_count(0)]
     )
 
     response = await client_with_auth.get(
@@ -214,14 +233,15 @@ async def test_list_conversations_with_data(client_with_auth, mock_db_session):
     )
 
     mock_user_orm = _mock_user_with_phone()
+    merged_result = _mock_empty_user()
     user_result = _make_user_query_result(mock_user_orm)
-    phone_user_result = _mock_phone_user(phone_user_id=42)
+    user_result = _mock_user(user_id=42)
 
     conv_result = MagicMock()
     conv_result.scalars.return_value.all.return_value = [conv1, conv2]
 
     mock_db_session.execute = AsyncMock(
-        side_effect=[user_result, phone_user_result, conv_result]
+        side_effect=[conv_result, _mock_count(1), _mock_count(0)]
     )
 
     response = await client_with_auth.get(
@@ -254,14 +274,20 @@ async def test_get_conversation_messages(client_with_auth, mock_db_session):
     conv = _mock_conversation(id=1, message_history=messages)
 
     mock_user_orm = _mock_user_with_phone()
+    merged_result = _mock_empty_user()
     user_result = _make_user_query_result(mock_user_orm)
-    phone_user_result = _mock_phone_user(phone_user_id=42)
+    user_result = _mock_user(user_id=42)
 
     conv_result = MagicMock()
     conv_result.scalar_one_or_none.return_value = conv
+    messages_result = MagicMock()
+    messages_result.scalars.return_value.all.return_value = [
+        _mock_message(role="user", content="Spent 50 on lunch"),
+        _mock_message(role="assistant", content="I've recorded that expense."),
+    ]
 
     mock_db_session.execute = AsyncMock(
-        side_effect=[user_result, phone_user_result, conv_result]
+        side_effect=[conv_result, messages_result]
     )
 
     response = await client_with_auth.get(
@@ -280,14 +306,15 @@ async def test_get_conversation_messages(client_with_auth, mock_db_session):
 async def test_get_conversation_messages_not_found(client_with_auth, mock_db_session):
     """Test getting messages from a non-existent conversation returns 404."""
     mock_user_orm = _mock_user_with_phone()
+    merged_result = _mock_empty_user()
     user_result = _make_user_query_result(mock_user_orm)
-    phone_user_result = _mock_phone_user(phone_user_id=42)
+    user_result = _mock_user(user_id=42)
 
     conv_result = MagicMock()
     conv_result.scalar_one_or_none.return_value = None  # no conversation found
 
     mock_db_session.execute = AsyncMock(
-        side_effect=[user_result, phone_user_result, conv_result]
+        side_effect=[merged_result, user_result, user_result, conv_result]
     )
 
     response = await client_with_auth.get(
@@ -299,15 +326,16 @@ async def test_get_conversation_messages_not_found(client_with_auth, mock_db_ses
 
 
 @pytest.mark.anyio
-async def test_get_conversation_messages_no_phone_user(
+async def test_get_conversation_messages_no_user(
     client_with_auth, mock_db_session
 ):
-    """Test getting messages when user has no PhoneUser returns 404."""
-    # User has no phone_number -> _get_phone_user_id returns None
+    """Test getting messages when user has no unified user returns 404."""
+    # User has no phone_number -> _get_user_id returns None
     user_no_phone = _mock_user_with_phone(phone=None)
+    merged_result = _mock_empty_user()
     user_result = _make_user_query_result(user_no_phone)
 
-    mock_db_session.execute = AsyncMock(return_value=user_result)
+    mock_db_session.execute = AsyncMock(side_effect=[merged_result, user_result])
 
     response = await client_with_auth.get(
         f"{settings.API_V1_STR}/bagcoin/conversations/1/messages"
@@ -352,7 +380,7 @@ async def test_get_pending_messages_with_data(client_with_auth, mock_db_session,
         raw_input="gastou 199,90 no mercado",
         transaction_date=now,
         created_at=now,
-        user_uuid=mock_user.id,
+        user_id=mock_user.id,
     )
     tx2 = _mock_transaction(
         id=2,
@@ -364,7 +392,7 @@ async def test_get_pending_messages_with_data(client_with_auth, mock_db_session,
         raw_input="recebeu 2500 de salário",
         transaction_date=now,
         created_at=now,
-        user_uuid=mock_user.id,
+        user_id=mock_user.id,
     )
 
     pending_result = MagicMock()
@@ -400,7 +428,7 @@ async def test_confirm_message(client_with_auth, mock_db_session, mock_user):
     tx = _mock_transaction(
         id=1,
         confidence_score=0.45,
-        user_uuid=mock_user.id,
+        user_id=mock_user.id,
     )
 
     tx_result = MagicMock()
@@ -458,7 +486,7 @@ async def test_confirm_message_wrong_user(client_with_auth, mock_db_session):
     tx = _mock_transaction(
         id=1,
         confidence_score=0.5,
-        user_uuid=uuid4(),  # different user
+        user_id=1,  # different user
     )
 
     tx_result = MagicMock()
@@ -466,7 +494,7 @@ async def test_confirm_message_wrong_user(client_with_auth, mock_db_session):
 
     mock_db_session.execute = AsyncMock(return_value=tx_result)
 
-    # The route filters by both Transaction.id AND Transaction.user_uuid == current_user.id,
+    # The route filters by both Transaction.id AND Transaction.user_id == current_user.id,
     # so a transaction belonging to a different user would never be returned
     tx_result.scalar_one_or_none.return_value = None
 

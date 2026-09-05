@@ -20,8 +20,8 @@ export function RegisterForm({ compact = false }: { compact?: boolean }) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     try {
-      await register(email, password, name || undefined, phone || undefined)
-      router.push("/login?registered=true")
+      const pending = await register(email, password, name || undefined, phone || undefined)
+      router.push(`/verify-email?email=${encodeURIComponent(pending.email)}&source=register&sent=1`)
     } catch {
       // error is set in the store
     }
@@ -29,7 +29,11 @@ export function RegisterForm({ compact = false }: { compact?: boolean }) {
 
   async function handleGoogleSuccess(idToken: string) {
     try {
-      await loginWithGoogle(idToken)
+      const result = await loginWithGoogle(idToken)
+      if (result.status === "pending") {
+        router.push(`/verify-email?email=${encodeURIComponent(result.pending.email)}&source=google`)
+        return
+      }
       router.push("/app")
     } catch {
       // error is set in the store
@@ -94,14 +98,14 @@ export function RegisterForm({ compact = false }: { compact?: boolean }) {
           <Input
             id="password"
             type="password"
-            placeholder="Mínimo 8 caracteres"
+            placeholder="Mínimo 6 caracteres"
             value={password}
             onChange={(e) => {
               setPassword(e.target.value)
               clearError()
             }}
             required
-            minLength={8}
+            minLength={6}
           />
         </div>
 

@@ -10,7 +10,6 @@ export default function OrcamentosPreview() {
       totalSpent={1730}
       totalBudget={2400}
       month="Abril de 2024"
-      onBack={() => {}}
       onAddBudget={() => {}}
     />
   )

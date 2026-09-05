@@ -40,7 +40,7 @@ async def link_to_message(db: AsyncSession, *, message_id: UUID, file_ids: Itera
 async def create(
     db: AsyncSession,
     *,
-    user_id: UUID,
+    user_id: int,
     filename: str,
     mime_type: str,
     size: int,
@@ -61,3 +61,21 @@ async def create(
     db.add(chat_file)
     await db.flush()
     return chat_file
+
+
+async def list_for_user(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    skip: int = 0,
+    limit: int = 20,
+) -> list[ChatFile]:
+    """List files uploaded by a user, newest first."""
+    result = await db.execute(
+        select(ChatFile)
+        .where(ChatFile.user_id == user_id)
+        .order_by(ChatFile.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    return list(result.scalars().all())

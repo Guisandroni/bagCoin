@@ -1,11 +1,12 @@
 
 # Production configuration
 # with Traefik reverse proxy
+# Frontend (Next.js) deployed on Vercel — only API services here.
 #
 # Usage:
 #   1. Copy .env.prod.example to .env.prod and fill in values:
 #      cp .env.prod.example .env.prod
-#   2. Run: docker-compose -f docker-compose.prod.yml up -d
+#   2. Run: docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 #
 # Prerequisites:
 #   1. Configure .env.prod with DOMAIN and ACME_EMAIL
@@ -16,11 +17,12 @@ services:
   traefik:
     image: traefik:v3.2
     container_name: bagcoin_api_traefik
+    env_file:
+      - .env.prod
     command:
       - "--api.dashboard=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=traefik-public"
+      - "--providers.file.filename=/etc/traefik/dynamic.yml"
+      - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       # Redirect HTTP to HTTPS
@@ -38,7 +40,8 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./deploy/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - ./deploy/traefik/usersfile:/etc/traefik/usersfile:ro
       - traefik_letsencrypt:/letsencrypt
     networks:
       - traefik-public
@@ -60,29 +63,37 @@ services:
       - "traefik.http.middlewares.bagcoin_api-security-headers.headers.referrerPolicy=strict-origin-when-cross-origin"
       - "traefik.http.middlewares.bagcoin_api-security-headers.headers.frameDeny=true"
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
 
   app:
     build:
       context: ./apps/server
       dockerfile: Dockerfile
+    image: bagcoin_api_backend:prod
+    pull_policy: build
     container_name: bagcoin_api_backend
     volumes:
       - media_data:/app/media
+      - reports_data:/app/reports
     env_file:
       - .env.prod
-      - ./apps/server/.env
     environment:
       - DEBUG=false
       - ENVIRONMENT=production
+      - ENABLE_API_DOCS=${ENABLE_API_DOCS:-false}
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-https://bagcoin.app}
+      - SUPPORT_EMAIL=${SUPPORT_EMAIL:-contato@bagcoin.app}
       - POSTGRES_HOST=db
       - REDIS_HOST=redis
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - INTERNAL_API_BASE_URL=http://app:8000
+      - WHATSAPP_BRIDGE_URL=http://whatsapp-bridge:3001
+      # Agent v2 toggles — override rápido via shell/env sem editar .env.prod.
+      # Valores padrão vêm do env_file quando estas variáveis não estão setadas.
+      - HUMANIZE_RESPONSES=${HUMANIZE_RESPONSES:-false}
+      - ECHO_AUDIO_TRANSCRIPTION=${ECHO_AUDIO_TRANSCRIPTION:-false}
+      - IMAGE_STRUCTURED_EXTRACT=${IMAGE_STRUCTURED_EXTRACT:-true}
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
     networks:
       - traefik-public
@@ -100,22 +111,20 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/api/v1/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          cpus: '0.5'
-          memory: 256M
 
   db:
     image: postgres:16-alpine
     container_name: bagcoin_api_db
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - POSTGRES_DB=${POSTGRES_DB:-bagcoin_api}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -128,11 +137,6 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
 
   redis:
     image: redis:7-alpine
@@ -149,28 +153,31 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
 
   celery_worker:
-    image: bagcoin_api_backend:dev
+    build:
+      context: ./apps/server
+      dockerfile: Dockerfile
+    image: bagcoin_api_backend:prod
+    pull_policy: build
     container_name: bagcoin_api_celery_worker
+    healthcheck:
+      disable: true
     volumes:
       - media_data:/app/media
+      - reports_data:/app/reports
     command: celery -A app.worker.celery_app worker --loglevel=warning --concurrency=4
     env_file:
       - .env.prod
-      - ./apps/server/.env
     environment:
       - DEBUG=false
+      - POSTGRES_HOST=db
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
     networks:
       - backend-internal
+      - egress
     depends_on:
       app:
         condition: service_started
@@ -179,25 +186,22 @@ services:
       db:
         condition: service_healthy
     restart: unless-stopped
-    deploy:
-      replicas: 2
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
 
   celery_beat:
-    image: bagcoin_api_backend:dev
+    build:
+      context: ./apps/server
+      dockerfile: Dockerfile
+    image: bagcoin_api_backend:prod
+    pull_policy: build
     container_name: bagcoin_api_celery_beat
+    healthcheck:
+      disable: true
     command: celery -A app.worker.celery_app beat --loglevel=warning
     env_file:
       - .env.prod
-      - ./apps/server/.env
     environment:
       - DEBUG=false
+      - POSTGRES_HOST=db
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -209,21 +213,22 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 128M
 
   flower:
-    image: bagcoin_api_backend:dev
+    build:
+      context: ./apps/server
+      dockerfile: Dockerfile
+    image: bagcoin_api_backend:prod
+    pull_policy: build
     container_name: bagcoin_api_flower
+    healthcheck:
+      disable: true
     command: celery -A app.worker.celery_app flower --port=5555
     env_file:
       - .env.prod
-      - ./apps/server/.env
     environment:
       - DEBUG=false
+      - POSTGRES_HOST=db
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -244,50 +249,55 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 128M
 
-  web:
+  whatsapp-bridge:
     build:
-      context: ./apps/web
-      target: prod
-    container_name: bagcoin_web
+      context: ./apps/whatsapp-bridge
+      dockerfile: Dockerfile
+    image: bagcoin_whatsapp_bridge:prod
+    pull_policy: build
+    container_name: bagcoin_whatsapp_bridge
+    volumes:
+      - whatsapp_data:/app/whatsapp-session
+    env_file:
+      - .env.prod
     environment:
-      - NEXT_PUBLIC_API_URL=https://api.${DOMAIN:-bagcoin.app}/api/v1
-      - API_URL=http://app:8000/api/v1
-      - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
-      - NEXT_TELEMETRY_DISABLED=1
-      - NODE_ENV=production
-      - BUN_JSC_forceRAMSize=402653184
-    mem_limit: 512m
-    mem_reservation: 256m
+      - FASTAPI_URL=http://app:8000/api/v1
+      - WHATSAPP_API_KEY=${WHATSAPP_API_KEY:?WHATSAPP_API_KEY is required}
+      - PORT=3001
     networks:
-      - traefik-public
       - backend-internal
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.bagcoin_web.rule=Host(`${DOMAIN:-bagcoin.app}`)"
-      - "traefik.http.routers.bagcoin_web.entrypoints=websecure"
-      - "traefik.http.routers.bagcoin_web.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.bagcoin_web.middlewares=bagcoin_web-security-headers@docker"
-      - "traefik.http.services.bagcoin_web.loadbalancer.server.port=3000"
-      - "traefik.http.middlewares.bagcoin_web-security-headers.headers.stsSeconds=31536000"
-      - "traefik.http.middlewares.bagcoin_web-security-headers.headers.stsIncludeSubdomains=true"
-      - "traefik.http.middlewares.bagcoin_web-security-headers.headers.stsPreload=true"
-      - "traefik.http.middlewares.bagcoin_web-security-headers.headers.contentTypeNosniff=true"
-      - "traefik.http.middlewares.bagcoin_web-security-headers.headers.browserXssFilter=true"
-      - "traefik.http.middlewares.bagcoin_web-security-headers.headers.referrerPolicy=strict-origin-when-cross-origin"
-      - "traefik.http.middlewares.bagcoin_web-security-headers.headers.frameDeny=true"
-      - "traefik.docker.network=traefik-public"
+      - egress
     depends_on:
-      - app
+      app:
+        condition: service_started
+    restart: unless-stopped
+
+  telegram-bridge:
+    build:
+      context: ./apps/telegram-bridge
+      dockerfile: Dockerfile
+    image: bagcoin_telegram_bridge:prod
+    pull_policy: build
+    container_name: bagcoin_telegram_bridge
+    env_file:
+      - .env.prod
+    environment:
+      - BACKEND_URL=http://app:8000
+      - API_KEY=${API_KEY:?API_KEY is required}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+    networks:
+      - backend-internal
+      - egress
+    depends_on:
+      app:
+        condition: service_started
     restart: unless-stopped
 
 networks:
   traefik-public:
+    driver: bridge
+  egress:
     driver: bridge
   backend-internal:
     driver: bridge
@@ -295,6 +305,8 @@ networks:
 
 volumes:
   media_data:
+  reports_data:
+  whatsapp_data:
   traefik_letsencrypt:
   postgres_data:
   redis_data:

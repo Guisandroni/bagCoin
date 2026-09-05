@@ -1,6 +1,6 @@
 import dynamic from "next/dynamic"
-import { getBudgets } from "@/lib/api-server"
-import { serverBudgetToRelease } from "@/lib/adapters"
+import { getBudgets, getCategories } from "@/lib/api-server"
+import { categoriesFromSources, serverBudgetToRelease } from "@/lib/adapters"
 import OrcamentosLoading from "./loading"
 
 const OrcamentosClient = dynamic(() => import("./orcamentos-client").then((m) => m.OrcamentosClient), {
@@ -8,8 +8,14 @@ const OrcamentosClient = dynamic(() => import("./orcamentos-client").then((m) =>
 })
 
 export default async function OrcamentosPage() {
-  const budgets = await getBudgets()
-  const releaseBudgets = (budgets ?? []).map(serverBudgetToRelease)
+  const [budgets, serverCategories] = await Promise.all([
+    getBudgets(),
+    getCategories(),
+  ])
+  const releaseBudgets = (budgets ?? []).map((budget) =>
+    serverBudgetToRelease(budget, serverCategories)
+  )
+  const categories = categoriesFromSources(null, serverCategories)
 
   const totalSpent = releaseBudgets.reduce((sum, b) => sum + b.spent, 0)
   const totalBudget = releaseBudgets.reduce((sum, b) => sum + b.total, 0)
@@ -17,6 +23,7 @@ export default async function OrcamentosPage() {
   return (
     <OrcamentosClient
       budgets={releaseBudgets}
+      categories={categories}
       totalSpent={totalSpent}
       totalBudget={totalBudget}
     />
