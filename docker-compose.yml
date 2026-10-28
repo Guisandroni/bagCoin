@@ -9,11 +9,8 @@ services:
     image: bagcoin_api_backend:dev
     container_name: bagcoin_api_backend
     ports:
-      - "7000:7000"
+      - "8000:8000"
     volumes:
-      - ./apps/server/app:/app/app:ro
-      - ./apps/server/alembic:/app/alembic:ro
-      - ./apps/server/cli:/app/cli:ro
       - media_data:/app/media
       - reports_data:/app/reports
     env_file:
@@ -46,7 +43,6 @@ services:
       - EMAIL_VERIFICATION_SEND_LIMIT_PER_HOUR=${EMAIL_VERIFICATION_SEND_LIMIT_PER_HOUR:-5}
       - EMAIL_VERIFICATION_SEND_LIMIT_PER_IP_PER_HOUR=${EMAIL_VERIFICATION_SEND_LIMIT_PER_IP_PER_HOUR:-20}
       - EMAIL_VERIFICATION_VERIFY_LIMIT_PER_10_MIN=${EMAIL_VERIFICATION_VERIFY_LIMIT_PER_10_MIN:-10}
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
       - backend
     depends_on:
@@ -55,13 +51,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import httpx; httpx.get('http://localhost:8000/api/v1/health')",
-        ]
+      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8000/api/v1/health')\" || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -83,7 +73,7 @@ services:
     networks:
       - backend
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bagcoin} -d ${POSTGRES_DB:-bagcoin}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -244,7 +234,7 @@ services:
     image: bagcoin_telegram_bridge:dev
     container_name: bagcoin_telegram_bridge
     environment:
-      - BACKEND_URL=http://bagcoin_api_backend:8000
+      - BACKEND_URL=http://app:8000
       - API_KEY=${API_KEY:-bagcoin_webhook_secret_123}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
     networks:
@@ -258,7 +248,8 @@ services:
     build:
       context: ./apps/web
       target: dev
-    image: bagcoin_web:prod
+      args: ["NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}", "NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}"]
+    image: bagcoin_web:dev
     container_name: bagcoin_web
     ports:
       - "3000:3000"

@@ -8,16 +8,15 @@
 services:
   app:
     build:
-      context: ./apps/server
+      context: ./apps/backend
       dockerfile: Dockerfile
     image: bagcoin_api_backend:dev
     container_name: bagcoin_api_backend
     ports:
       - "8000:8000"
     volumes:
-      - ./apps/server/app:/app/app:ro
-      - ./apps/server/cli:/app/cli:ro
       - media_data:/app/media
+      - reports_data:/app/reports
     env_file:
       - ./apps/server/.env
     environment:
@@ -27,7 +26,7 @@ services:
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: node dist/main
     networks:
       - backend
     depends_on:
@@ -73,7 +72,10 @@ services:
       retries: 5
     restart: unless-stopped
   celery_worker:
-    image: bagcoin_api_backend:dev
+    build:
+      context: ./apps/server
+      dockerfile: Dockerfile
+    image: bagcoin_api_server:dev
     container_name: bagcoin_api_celery_worker
     volumes:
       - ./apps/server/app:/app/app:ro
@@ -105,7 +107,10 @@ services:
     restart: unless-stopped
 
   celery_beat:
-    image: bagcoin_api_backend:dev
+    build:
+      context: ./apps/server
+      dockerfile: Dockerfile
+    image: bagcoin_api_server:dev
     container_name: bagcoin_api_celery_beat
     volumes:
       - ./apps/server/app:/app/app:ro
@@ -133,7 +138,10 @@ services:
     restart: unless-stopped
 
   flower:
-    image: bagcoin_api_backend:dev
+    build:
+      context: ./apps/server
+      dockerfile: Dockerfile
+    image: bagcoin_api_server:dev
     container_name: bagcoin_api_flower
     command: celery -A app.worker.celery_app flower --port=5555
     ports:
@@ -193,3 +201,4 @@ volumes:
   media_data:
   postgres_data:
   redis_data:
+  reports_data:

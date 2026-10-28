@@ -66,7 +66,7 @@ services:
 
   app:
     build:
-      context: ./apps/server
+      context: ./apps/backend
       dockerfile: Dockerfile
     image: bagcoin_api_backend:prod
     pull_policy: build
@@ -94,7 +94,7 @@ services:
       - HUMANIZE_RESPONSES=${HUMANIZE_RESPONSES:-false}
       - ECHO_AUDIO_TRANSCRIPTION=${ECHO_AUDIO_TRANSCRIPTION:-false}
       - IMAGE_STRUCTURED_EXTRACT=${IMAGE_STRUCTURED_EXTRACT:-true}
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+    command: node dist/main
     networks:
       - traefik-public
       - backend-internal
@@ -112,7 +112,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/api/v1/health')"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8000/api/v1/health').then(r=>{if(!r.ok)process.exit(1)})"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -158,7 +158,7 @@ services:
     build:
       context: ./apps/server
       dockerfile: Dockerfile
-    image: bagcoin_api_backend:prod
+    image: bagcoin_api_server:prod
     pull_policy: build
     container_name: bagcoin_api_celery_worker
     healthcheck:
@@ -191,7 +191,7 @@ services:
     build:
       context: ./apps/server
       dockerfile: Dockerfile
-    image: bagcoin_api_backend:prod
+    image: bagcoin_api_server:prod
     pull_policy: build
     container_name: bagcoin_api_celery_beat
     healthcheck:
@@ -218,7 +218,7 @@ services:
     build:
       context: ./apps/server
       dockerfile: Dockerfile
-    image: bagcoin_api_backend:prod
+    image: bagcoin_api_server:prod
     pull_policy: build
     container_name: bagcoin_api_flower
     healthcheck:
