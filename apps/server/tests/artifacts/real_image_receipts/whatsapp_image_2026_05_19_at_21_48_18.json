@@ -1,0 +1,31 @@
+{
+  "source_image": "/Users/guilherme/Downloads/bagCoin/examples/WhatsApp Image 2026-05-19 at 21.48.18.jpeg",
+  "gemini_structured": {},
+  "bagcoin_document_analysis": {
+    "document_type": "unknown",
+    "is_financial": false,
+    "extraction_method": "multimodal_preextract+llm",
+    "confidence": 0.0,
+    "requires_confirmation": false,
+    "transactions": [],
+    "issues": [
+      "No text extracted"
+    ],
+    "summary": "Unable to extract text from image",
+    "period_start": null,
+    "period_end": null,
+    "totals": {
+      "income": 0,
+      "expense": 0,
+      "transactions": 0
+    },
+    "source": {
+      "filename": "WhatsApp Image 2026-05-19 at 21.48.18.jpeg",
+      "mimetype": "image/jpeg"
+    }
+  },
+  "confirmation_summary": "Encontrei 0 transaçãoões neste documento.\n\n- Receitas: R$ 0,00\n- Despesas: R$ 0,00\n\nPontos de atenção: No text extracted\n\nRevise os principais lançamentos:\n\n\nSe estiver correto, posso importar essas transações.",
+  "single_transaction_to_import": null,
+  "receipt_items": [],
+  "total_amount": null
+}

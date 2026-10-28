@@ -21,7 +21,7 @@ import { BRAND, NAV_ITEMS } from "@/lib/constants"
 import { useAuthStore } from "@/lib/auth-store"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { useOpenIntegrationChat } from "@/hooks/use-integrations"
+// import { useOpenIntegrationChat } from "@/hooks/use-integrations"
 import { useWhatsAppConnect } from "@/hooks/use-whatsapp-connect"
 
 import { useAppStore } from "@/lib/store"
@@ -44,7 +44,7 @@ export function Sidebar() {
   const openDrawer = useAppStore((s) => s.openDrawer)
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useAppStore((s) => s.toggleSidebar)
-  const { openIntegrationChat } = useOpenIntegrationChat()
+  // const { openIntegrationChat } = useOpenIntegrationChat()
   const { isLinked: whatsappLinked, isConnecting: whatsappConnecting, connect: connectWhatsApp } = useWhatsAppConnect()
 
   const initials = user?.full_name
@@ -165,6 +165,7 @@ export function Sidebar() {
             />
           )}
         </button>
+        {/*
         <button
           type="button"
           disabled={whatsappConnecting}
@@ -181,6 +182,7 @@ export function Sidebar() {
           )}
           {!sidebarCollapsed && <span className="truncate">Telegram</span>}
         </button>
+        */}
 
         {!sidebarCollapsed && (
           <p className="px-2 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">

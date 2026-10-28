@@ -1,6 +1,5 @@
 import dynamic from "next/dynamic"
-import { getReports } from "@/lib/api-server"
-import { serverReportToRelease } from "@/lib/adapters"
+import { getTransactionSummary, getTransactions } from "@/lib/api-server"
 import RelatoriosLoading from "./loading"
 
 const RelatoriosClient = dynamic(() => import("./relatorios-client").then((m) => m.RelatoriosClient), {
@@ -8,8 +7,15 @@ const RelatoriosClient = dynamic(() => import("./relatorios-client").then((m) =>
 })
 
 export default async function RelatoriosPage() {
-  const serverReports = await getReports()
-  const reports = (serverReports ?? []).map(serverReportToRelease)
+  const [summary, transactions] = await Promise.all([
+    getTransactionSummary(),
+    getTransactions({ limit: 100 }),
+  ])
 
-  return <RelatoriosClient reports={reports} />
+  return (
+    <RelatoriosClient
+      summary={summary}
+      transactions={transactions?.items ?? []}
+    />
+  )
 }

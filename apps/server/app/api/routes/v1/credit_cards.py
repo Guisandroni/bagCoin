@@ -1,8 +1,6 @@
 """Credit Card REST endpoints for web frontend."""
 
 from typing import Any
-from uuid import UUID
-
 from fastapi import APIRouter, status
 
 from app.api.deps import CurrentUser, DBSession
@@ -33,7 +31,7 @@ async def create_credit_card(
 
 @router.get("/{card_id}", response_model=CreditCardResponse)
 async def get_credit_card(
-    card_id: UUID,
+    card_id: int,
     current_user: CurrentUser,
     db: DBSession,
 ) -> Any:
@@ -43,7 +41,7 @@ async def get_credit_card(
 
 @router.patch("/{card_id}", response_model=CreditCardResponse)
 async def update_credit_card(
-    card_id: UUID,
+    card_id: int,
     current_user: CurrentUser,
     db: DBSession,
     body: CreditCardUpdate,
@@ -54,7 +52,7 @@ async def update_credit_card(
 
 @router.delete("/{card_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_credit_card(
-    card_id: UUID,
+    card_id: int,
     current_user: CurrentUser,
     db: DBSession,
 ) -> None:

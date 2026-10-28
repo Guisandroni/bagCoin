@@ -35,10 +35,12 @@ export function TransactionDetailModal() {
   if (!t) return null
 
   const cat = CATEGORIES.find((c) => c.name === t.category)
+  const isExpense = t.type === "despesa"
+  const signedAmount = isExpense ? -Math.abs(t.amount) : Math.abs(t.amount)
 
   function handleEdit() {
     setMode("edit")
-    setEditType(t!.amount < 0 ? "despesa" : "receita")
+    setEditType(t!.type)
     setEditAmount(formatCurrency(Math.abs(t!.amount)).replace("R$ ", ""))
     setEditDescription(t!.name)
     setEditCategory(t!.category)
@@ -86,7 +88,7 @@ export function TransactionDetailModal() {
           <div className="rounded-xl border border-danger/30 bg-danger/5 px-4 py-4 text-center">
             <p className="font-semibold">Tem certeza que deseja excluir esta transação?</p>
             <p className="mt-1 text-[13px] text-muted-foreground">
-              {t.name} — {formatCurrency(t.amount)}
+              {t.name} — {formatCurrency(signedAmount)}
             </p>
             <p className="mt-1 text-[12px] text-muted-foreground">
               Essa ação não pode ser desfeita.
@@ -111,7 +113,7 @@ export function TransactionDetailModal() {
   }
 
   if (mode === "edit") {
-    const filteredCategories = t.amount < 0
+    const filteredCategories = editType === "despesa"
       ? CATEGORIES.filter((c) => c.name !== "Salário")
       : CATEGORIES.filter((c) => c.name === "Salário" || c.name === "Educação")
 
@@ -216,10 +218,10 @@ export function TransactionDetailModal() {
           <p
             className={cn(
               "font-heading text-[22px] font-semibold tracking-tight",
-              t.amount < 0 ? "text-danger" : "text-success"
+              isExpense ? "text-danger" : "text-success"
             )}
           >
-            {formatCurrency(t.amount)}
+            {formatCurrency(signedAmount)}
           </p>
         </div>
 
@@ -236,7 +238,7 @@ export function TransactionDetailModal() {
 
         <div className="divide-y divide-border">
           {[
-            { label: "Valor", value: formatCurrency(t.amount), className: t.amount < 0 ? "text-danger" : "text-success" },
+            { label: "Valor", value: formatCurrency(signedAmount), className: isExpense ? "text-danger" : "text-success" },
             {
               label: "Categoria",
               value: (

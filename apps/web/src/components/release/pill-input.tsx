@@ -22,6 +22,7 @@ export function PillInput({
 }: PillInputProps) {
   const [showPassword, setShowPassword] = useState(false)
   const inputId = id || props.placeholder?.toLowerCase().replace(/\s+/g, "-")
+  const inputType = showPasswordToggle ? (showPassword ? "text" : "password") : props.type
 
   return (
     <div className="flex flex-col gap-1">
@@ -40,6 +41,7 @@ export function PillInput({
           </span>
         )}
         <input
+          {...props}
           id={inputId}
           className={cn(
             "w-full h-14 bg-[var(--rls-surface-container)] border-none rounded-[var(--rls-radius-pill)]",
@@ -52,12 +54,13 @@ export function PillInput({
             error && "ring-2 ring-[var(--rls-error)]",
             className
           )}
-          type={showPasswordToggle ? (showPassword ? "text" : "password") : props.type}
-          {...props}
+          type={inputType}
         />
         {showPasswordToggle && (
           <button
             type="button"
+            aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+            aria-pressed={showPassword}
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-4 text-[var(--rls-outline)] hover:text-[var(--rls-on-surface)] transition-colors"
           >

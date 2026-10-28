@@ -30,14 +30,14 @@ export function InfoCard({
       "bg-[var(--rls-primary-container)] text-[var(--rls-on-primary)] relative overflow-hidden",
     success:
       "bg-[var(--rls-secondary-container)] text-[var(--rls-on-secondary-container)]",
-    danger: "bg-[var(--rls-error-container)] text-[var(--rls-on-error)]",
+    danger: "bg-[var(--rls-error-container)] text-[var(--rls-on-error-container)]",
   }
 
   const valueColorMap = {
     default: "text-[var(--rls-on-surface)]",
     primary: "text-[var(--rls-on-primary)]",
     success: "text-[var(--rls-on-secondary-container)]",
-    danger: "text-[var(--rls-on-error)]",
+    danger: "text-[var(--rls-on-error-container)]",
   }
 
   return (
@@ -83,7 +83,7 @@ export function InfoCard({
 
       <span
         className={cn(
-          "rls-text-display-md",
+          "text-[22px] font-semibold leading-7 tabular-nums",
           valueColorMap[variant]
         )}
       >

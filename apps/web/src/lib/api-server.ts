@@ -52,16 +52,19 @@ async function serverFetch<T>(path: string, options?: RequestInit): Promise<T> {
 
 export interface ServerTransaction {
   id: string
-  type?: "INCOME" | "EXPENSE"
+  type: "INCOME" | "EXPENSE"
   name: string
   description?: string
   category?: string
+  category_id?: number | null
   category_name?: string
   amount: number
   date?: string
   transaction_date?: string
   source: string
   status: string
+  is_recurring?: boolean
+  recurrence_frequency?: "weekly" | "monthly" | "yearly" | null
 }
 
 export interface TransactionSummary {
@@ -74,10 +77,24 @@ export interface TransactionSummary {
 }
 
 export async function getTransactionSummary(): Promise<TransactionSummary | null> {
-  "use cache: private"
-  cacheTag("transactions", "summary")
-  cacheLife("minutes")
   return serverFetch<TransactionSummary>("/bagcoin/transactions/summary")
+}
+
+export interface ServerCategory {
+  id: number
+  name: string
+  color: string
+  emoji?: string
+  type: "despesa" | "receita" | "investimento"
+  is_default: boolean
+  is_user_created?: boolean
+  can_delete?: boolean
+  created_at?: string
+  updated_at?: string | null
+}
+
+export async function getCategories(): Promise<ServerCategory[] | null> {
+  return serverFetch("/bagcoin/categories")
 }
 
 export async function getTransactions(params?: {
@@ -87,10 +104,9 @@ export async function getTransactions(params?: {
   page?: number
   skip?: number
   limit?: number
+  date_from?: string
+  date_to?: string
 }): Promise<{ items: ServerTransaction[]; total: number } | null> {
-  "use cache: private"
-  cacheTag("transactions")
-  cacheLife("minutes")
   const qs = new URLSearchParams()
   if (params?.search) qs.set("search", params.search)
   if (params?.type) qs.set("type", params.type)
@@ -98,6 +114,8 @@ export async function getTransactions(params?: {
   if (params?.page) qs.set("page", String(params.page))
   if (params?.skip !== undefined) qs.set("skip", String(params.skip))
   if (params?.limit) qs.set("limit", String(params.limit))
+  if (params?.date_from) qs.set("date_from", params.date_from)
+  if (params?.date_to) qs.set("date_to", params.date_to)
   const query = qs.toString()
   return serverFetch(`/bagcoin/transactions${query ? `?${query}` : ""}`)
 }
@@ -105,12 +123,13 @@ export async function getTransactions(params?: {
 export interface ServerBudget {
   id: number
   name: string
-  period: string
+  period: "monthly" | "weekly" | "yearly" | string
   total_limit: number
   total_spent: number
   total_remaining: number
   percentage: number
   budget_type: string
+  budget_date?: string
   category_id: number | null
   category_name: string | null
   created_at: string
@@ -118,9 +137,6 @@ export interface ServerBudget {
 }
 
 export async function getBudgets(): Promise<ServerBudget[] | null> {
-  "use cache: private"
-  cacheTag("budgets")
-  cacheLife("hours")
   return serverFetch("/bagcoin/budgets")
 }
 
@@ -138,9 +154,6 @@ export interface ServerGoal {
 }
 
 export async function getGoals(): Promise<ServerGoal[] | null> {
-  "use cache: private"
-  cacheTag("goals")
-  cacheLife("hours")
   return serverFetch("/bagcoin/goals")
 }
 

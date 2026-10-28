@@ -25,9 +25,9 @@ export const mockBudgetSingle = {
 // ----------------- TRANSACTIONS -----------------
 export const mockTransactions = {
   items: [
-    { id: "1", name: "Supermercado", category: "Alimentação", amount: -287.5, date: "30 Abr", source: "manual", status: "confirmed", created_at: "2026-04-30T00:00:00Z", updated_at: null },
-    { id: "2", name: "Salário", category: "Salário", amount: 8500, date: "28 Abr", source: "auto", status: "confirmed", created_at: "2026-04-28T00:00:00Z", updated_at: null },
-    { id: "3", name: "Uber", category: "Transporte", amount: -35, date: "29 Abr", source: "manual", status: "pending", created_at: "2026-04-29T00:00:00Z", updated_at: null },
+    { id: "1", type: "EXPENSE", name: "Supermercado", category: "Alimentação", amount: 287.5, date: "30 Abr", source: "manual", status: "confirmed", created_at: "2026-04-30T00:00:00Z", updated_at: null },
+    { id: "2", type: "INCOME", name: "Salário", category: "Salário", amount: 8500, date: "28 Abr", source: "auto", status: "confirmed", created_at: "2026-04-28T00:00:00Z", updated_at: null },
+    { id: "3", type: "EXPENSE", name: "Uber", category: "Transporte", amount: 35, date: "29 Abr", source: "manual", status: "pending", created_at: "2026-04-29T00:00:00Z", updated_at: null },
   ],
   total: 3,
 }

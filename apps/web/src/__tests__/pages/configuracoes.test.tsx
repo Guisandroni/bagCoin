@@ -2,9 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import ConfiguracoesPage from "@/app/app/configuracoes/page"
 
-// ── Mocks ──────────────────────────────────────────────
-
 const mockSetTheme = vi.fn()
+const mockToggleDrawer = vi.fn()
 let mockTheme = "dark"
 
 vi.mock("next-themes", () => ({
@@ -14,7 +13,12 @@ vi.mock("next-themes", () => ({
   }),
 }))
 
-// ── Tests ──────────────────────────────────────────────
+vi.mock("@/lib/store", () => ({
+  useAppStore: (selector?: (state: { toggleDrawer: typeof mockToggleDrawer }) => unknown) => {
+    const state = { toggleDrawer: mockToggleDrawer }
+    return selector ? selector(state) : state
+  },
+}))
 
 describe("ConfiguracoesPage", () => {
   beforeEach(() => {
@@ -22,9 +26,12 @@ describe("ConfiguracoesPage", () => {
     mockTheme = "dark"
   })
 
-  it("renderiza título da página", () => {
+  it("renderiza título e botão de abrir drawer", () => {
     render(<ConfiguracoesPage />)
-    expect(screen.getByText("Aparência")).toBeInTheDocument()
+    expect(screen.getByText("Configurações")).toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText("Abrir menu"))
+    expect(mockToggleDrawer).toHaveBeenCalled()
   })
 
   it("renderiza as três opções de aparência", () => {
@@ -34,76 +41,23 @@ describe("ConfiguracoesPage", () => {
     expect(screen.getByText("Sistema")).toBeInTheDocument()
   })
 
-  it("botão do tema ativo tem classe bg-primary (default variant)", () => {
-    mockTheme = "dark"
-    render(<ConfiguracoesPage />)
-
-    const darkButton = screen.getByText("Escuro").closest("button")
-    expect(darkButton?.className).toContain("bg-primary")
-
-    const lightButton = screen.getByText("Claro").closest("button")
-    expect(lightButton?.className).toContain("bg-secondary")
-  })
-
-  it("chama setTheme com 'light' ao clicar em Claro", () => {
+  it("chama setTheme ao clicar nas opções", () => {
     render(<ConfiguracoesPage />)
     fireEvent.click(screen.getByText("Claro"))
-    expect(mockSetTheme).toHaveBeenCalledWith("light")
-  })
-
-  it("chama setTheme com 'dark' ao clicar em Escuro", () => {
-    render(<ConfiguracoesPage />)
     fireEvent.click(screen.getByText("Escuro"))
-    expect(mockSetTheme).toHaveBeenCalledWith("dark")
-  })
-
-  it("chama setTheme com 'system' ao clicar em Sistema", () => {
-    render(<ConfiguracoesPage />)
     fireEvent.click(screen.getByText("Sistema"))
+
+    expect(mockSetTheme).toHaveBeenCalledWith("light")
+    expect(mockSetTheme).toHaveBeenCalledWith("dark")
     expect(mockSetTheme).toHaveBeenCalledWith("system")
   })
 
-  it("renderiza seção de Preferências com idioma, notificações e privacidade", () => {
-    render(<ConfiguracoesPage />)
-    expect(screen.getByText("Preferências")).toBeInTheDocument()
-    expect(screen.getByText("Idioma")).toBeInTheDocument()
-    expect(screen.getByText("Notificações")).toBeInTheDocument()
-    expect(screen.getByText("Privacidade")).toBeInTheDocument()
-  })
-
-  it("renderiza descrições das opções de preferências", () => {
-    render(<ConfiguracoesPage />)
-    expect(screen.getByText("Português (Brasil)")).toBeInTheDocument()
-    expect(screen.getByText("Alertas de transações e metas")).toBeInTheDocument()
-    expect(screen.getByText("Dados e permissões")).toBeInTheDocument()
-  })
-
-  it("renderiza seção do WhatsApp com status de conexão", () => {
-    render(<ConfiguracoesPage />)
-    expect(screen.getByText("WhatsApp")).toBeInTheDocument()
-    expect(screen.getByText("Conexão ativa")).toBeInTheDocument()
-    expect(screen.getByText("Todos os lançamentos são detectados automaticamente")).toBeInTheDocument()
-  })
-
-  it("destaca tema 'light' com bg-primary quando é o tema atual", () => {
-    mockTheme = "light"
+  it("não renderiza o formulário de suporte dentro das configurações", () => {
     render(<ConfiguracoesPage />)
 
-    const lightButton = screen.getByText("Claro").closest("button")
-    expect(lightButton?.className).toContain("bg-primary")
-
-    const darkButton = screen.getByText("Escuro").closest("button")
-    expect(darkButton?.className).toContain("bg-secondary")
-  })
-
-  it("destaca tema 'system' com bg-primary quando é o tema atual", () => {
-    mockTheme = "system"
-    render(<ConfiguracoesPage />)
-
-    const systemButton = screen.getByText("Sistema").closest("button")
-    expect(systemButton?.className).toContain("bg-primary")
-
-    const lightButton = screen.getByText("Claro").closest("button")
-    expect(lightButton?.className).toContain("bg-secondary")
+    expect(screen.queryByText("Suporte")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Assunto")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Mensagem para o suporte")).not.toBeInTheDocument()
+    expect(screen.queryByText("Enviar mensagem")).not.toBeInTheDocument()
   })
 })

@@ -1,110 +1,116 @@
 "use client"
 
-import { ArrowLeft } from "lucide-react"
+import Image from "next/image"
 import {
-  User,
-  Palette,
+  FolderTree,
+  Home,
+  LifeBuoy,
   MessageSquare,
-  Send,
-  LogOut,
+  // Send,
+  Target,
+  User,
+  Wallet,
+  ArrowDownUp,
 } from "lucide-react"
-import { AppBar } from "./app-bar"
-import { ListItem } from "./list-item"
+import { cn } from "@/lib/utils"
 import type { ReleaseProfile } from "./types"
 
 interface SettingsViewProps {
   profile: ReleaseProfile
-  onBack?: () => void
   onNavigate?: (section: string) => void
-  onLogout?: () => void
-  variant?: "full" | "mobile"
+  openingChannel?: "whatsapp" | "telegram" | null
+  activeSection?: string
 }
 
 export function SettingsView({
   profile,
-  onBack,
   onNavigate,
-  onLogout,
-  variant = "full",
+  openingChannel,
+  activeSection,
 }: SettingsViewProps) {
-  const isMobile = variant === "mobile"
+  const groups = [
+    {
+      title: "Organização",
+      items: [
+        { id: "inicio", label: "Início", icon: Home },
+        { id: "transacoes", label: "Transações", icon: ArrowDownUp },
+        { id: "categorias", label: "Categorias", icon: FolderTree },
+        { id: "orcamentos", label: "Orçamentos", icon: Wallet },
+        { id: "metas", label: "Metas", icon: Target },
+      ],
+    },
+    {
+      title: "Conta",
+      items: [
+        { id: "perfil", label: "Perfil", icon: User },
+        { id: "suporte", label: "Suporte", icon: LifeBuoy },
+      ],
+    },
+    {
+      title: "Chatbot",
+      items: [
+        { id: "whatsapp", label: openingChannel === "whatsapp" ? "Abrindo WhatsApp..." : "WhatsApp", icon: MessageSquare },
+        // { id: "telegram", label: openingChannel === "telegram" ? "Abrindo Telegram..." : "Telegram", icon: Send },
+      ],
+    },
+  ]
 
   return (
-    <div className="rls min-h-screen bg-[var(--rls-background)]">
-      <AppBar
-        title="Configurações"
-        onBack={onBack}
-      />
+    <nav className="rls flex h-full w-full flex-col bg-[var(--rls-surface-container-lowest)] text-[var(--rls-on-surface)]">
+      <div className="flex-1 overflow-y-auto px-4 py-5">
+        <div className="flex flex-col gap-7">
+          {groups.map((group) => (
+            <section key={group.title} className="flex flex-col gap-2">
+              <h2 className="px-3 text-[13px] font-medium leading-5 text-[var(--rls-on-surface-variant)]">
+                {group.title}
+              </h2>
+              <div className="flex flex-col gap-1">
+                {group.items.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => onNavigate?.(item.id)}
+                      className={cn(
+                        "flex h-11 w-full items-center gap-3 rounded-[var(--rls-radius)] px-3 text-left text-[15px] font-semibold text-[var(--rls-on-surface-variant)] transition-colors active:scale-[0.99]",
+                        activeSection === item.id && "bg-[var(--rls-primary-container)]/10 text-[var(--rls-primary-container)]"
+                      )}
+                    >
+                      <Icon className="h-5 w-5 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
 
-      <main className="px-[var(--rls-container-margin)] flex flex-col gap-[var(--rls-stack-gap-lg)] pt-[var(--rls-stack-gap-md)] pb-24">
-        {/* Profile Section */}
-        <div className="flex flex-col items-center gap-3 py-6">
-          <div className="w-24 h-24 rounded-full overflow-hidden bg-[var(--rls-surface-variant)] flex items-center justify-center">
+      <div className="border-t border-[var(--rls-outline-variant)] p-4">
+        <div className="flex items-center gap-3">
+          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[var(--rls-radius)] bg-[var(--rls-primary-container)]/10">
             {profile.avatarUrl ? (
-              <img
+              <Image
                 src={profile.avatarUrl}
                 alt={profile.name}
-                className="w-full h-full object-cover"
+                fill
+                sizes="48px"
+                unoptimized
+                className="object-cover"
               />
             ) : (
-              <User className="w-10 h-10 text-[var(--rls-on-surface-variant)]" />
+              <span className="text-base font-bold text-[var(--rls-primary-container)]">
+                {profile.name.slice(0, 2).toUpperCase()}
+              </span>
             )}
           </div>
-          <div className="text-center">
-            <h2 className="rls-text-title-lg text-[var(--rls-on-surface)]">
-              {profile.name}
-            </h2>
-            <p className="rls-text-body-md text-[var(--rls-on-surface-variant)]">
-              {profile.email}
-            </p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-bold text-[var(--rls-on-surface)]">{profile.name}</p>
           </div>
         </div>
-
-        {/* Settings List */}
-        <div className="flex flex-col gap-2">
-          <ListItem
-            icon={<User className="w-5 h-5 text-[var(--rls-primary-container)]" />}
-            iconBg="bg-[var(--rls-primary-container)]/10"
-            title="Perfil"
-            description="Editar informações pessoais"
-            onClick={() => onNavigate?.("perfil")}
-          />
-          <ListItem
-            icon={<Palette className="w-5 h-5 text-[var(--rls-secondary)]" />}
-            iconBg="bg-[var(--rls-secondary-container)]/20"
-            title="Relatórios"
-            description="Veja seus ultimos relatórios"
-            onClick={() => onNavigate?.("relatorios")}
-          />
-          {!isMobile && (
-            <>
-              <ListItem
-                icon={<MessageSquare className="w-5 h-5 text-[var(--rls-secondary)]" />}
-                iconBg="bg-[var(--rls-secondary-container)]/20"
-                title="WhatsApp"
-                description="Chat bot para transações"
-                onClick={() => onNavigate?.("whatsapp")}
-              />
-              <ListItem
-                icon={<Send className="w-5 h-5 text-blue-600" />}
-                iconBg="bg-blue-100"
-                title="Telegram"
-                description="Bot para notificações"
-                onClick={() => onNavigate?.("telegram")}
-              />
-            </>
-          )}
-        </div>
-
-        {/* Logout */}
-        <button
-          onClick={onLogout}
-          className="w-full h-14 bg-[var(--rls-error-container)] text-[var(--rls-on-error)] rls-text-body-lg rounded-[var(--rls-radius-pill)] flex items-center justify-center gap-2 hover:opacity-90 transition-opacity active:scale-[0.98]"
-        >
-          <LogOut className="w-5 h-5" />
-          Sair da Conta
-        </button>
-      </main>
-    </div>
+      </div>
+    </nav>
   )
 }

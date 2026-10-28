@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import axios from "axios"
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query"
 import apiClient from "@/lib/api-client"
@@ -106,7 +106,9 @@ export async function openIntegrationChat(
   }
 
   const w = window.open(deeplink, "_blank", "noopener,noreferrer")
-  if (!w || w.closed) window.location.href = deeplink
+  if (!w || w.closed) {
+    console.warn("[integrations] browser blocked chatbot tab")
+  }
 }
 
 export function useIntegrationStatus(pollWhileOpen: boolean) {
@@ -124,15 +126,19 @@ export function useIntegrationStatus(pollWhileOpen: boolean) {
 export function useOpenIntegrationChat() {
   const queryClient = useQueryClient()
   const [openingChannel, setOpeningChannel] = useState<IntegrationChannel | null>(null)
+  const openingRef = useRef<IntegrationChannel | null>(null)
 
   const run = useCallback(
     async (channel: IntegrationChannel) => {
+      if (openingRef.current) return
+      openingRef.current = channel
       setOpeningChannel(channel)
       try {
         await openIntegrationChat(channel, queryClient)
       } catch (e) {
         console.error("[integrations] open chat failed", e)
       } finally {
+        openingRef.current = null
         setOpeningChannel(null)
       }
     },

@@ -3,6 +3,7 @@
 
 import pytest
 from httpx import AsyncClient
+from uuid import uuid4
 
 from app.core.config import settings
 
@@ -41,6 +42,37 @@ async def test_missing_auth_returns_401(client: AsyncClient):
     """Test that missing authentication returns 401."""
     response = await client.get(f"{settings.API_V1_STR}/users/me")
     assert response.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_app_exception_handler_serializes_uuid_details():
+    """AppException details may contain UUIDs from service-layer errors."""
+    from starlette.requests import Request
+
+    from app.api.exception_handlers import app_exception_handler
+    from app.core.exceptions import NotFoundError
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/api/v1/auth/me",
+            "headers": [],
+            "query_string": b"",
+            "server": ("testserver", 80),
+            "scheme": "http",
+            "client": ("testclient", 50000),
+        }
+    )
+    user_id = uuid4()
+
+    response = await app_exception_handler(
+        request,
+        NotFoundError(message="Usuário não encontrado", details={"user_id": user_id}),
+    )
+
+    assert response.status_code == 404
+    assert str(user_id).encode() in response.body
 
 
 @pytest.fixture

@@ -10,7 +10,6 @@ export const NAV_ITEMS = [
   { id: "metas", label: "Metas", icon: "Target" },
   { id: "categorias", label: "Categorias", icon: "LayoutGrid" },
   { id: "confirmacoes", label: "Confirmações", icon: "MessageSquare" },
-  { id: "relatorios", label: "Relatórios", icon: "FileText" },
 ]
 
 /** Bottom bar: Início, Transações, Orçamentos, Metas, Categorias */
@@ -30,8 +29,6 @@ export { CATEGORY_LIST, CATEGORIES_WITH_EMOJI, EXPENSE_CATEGORIES, INCOME_CATEGO
 
 export const PERIODS = [
   { value: "monthly", label: "Mensal" },
-  { value: "weekly", label: "Semanal" },
-  { value: "yearly", label: "Anual" },
 ]
 
 export const SOURCE_LABELS: Record<string, string> = {

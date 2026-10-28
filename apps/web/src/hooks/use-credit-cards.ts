@@ -57,7 +57,7 @@ export function useCreateCreditCard() {
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_CREATE_CC)
       console.error('[hook:credit-cards]', err)
-      toast.error(err.message || "Erro ao criar cartão", { id: TOAST_ID_CREATE_CC })
+      toast.error("Não foi possível criar o cartão. Tente novamente.", { id: TOAST_ID_CREATE_CC })
     },
   })
 }
@@ -77,7 +77,7 @@ export function useUpdateCreditCard() {
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_UPDATE_CC)
       console.error('[hook:credit-cards]', err)
-      toast.error(err.message || "Erro ao atualizar cartão", { id: TOAST_ID_UPDATE_CC })
+      toast.error("Não foi possível atualizar o cartão. Tente novamente.", { id: TOAST_ID_UPDATE_CC })
     },
   })
 }
@@ -97,7 +97,7 @@ export function useDeleteCreditCard() {
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_DELETE_CC)
       console.error('[hook:credit-cards]', err)
-      toast.error(err.message || "Erro ao excluir cartão", { id: TOAST_ID_DELETE_CC })
+      toast.error("Não foi possível excluir o cartão. Tente novamente.", { id: TOAST_ID_DELETE_CC })
     },
   })
 }

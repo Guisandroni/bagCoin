@@ -1,41 +1,31 @@
 """Budget and BudgetItem models for spending limits."""
 
-import uuid
+from __future__ import annotations
 
-from sqlalchemy import Float, ForeignKey, Integer, String
-from sqlalchemy.dialects.postgresql import UUID
+from typing import TYPE_CHECKING
+
+from datetime import date
+
+from sqlalchemy import Date, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 
+if TYPE_CHECKING:
+    from app.db.models.category import Category
+    from app.db.models.user import User
+
 
 class Budget(Base, TimestampMixin):
-    """Budget model — defines a spending plan for a period.
-
-    Attributes:
-        id: Auto-increment primary key.
-        user_id: FK to phone_users.
-        user_uuid: FK to users (web app users).
-        category_id: FK to categories (nullable for general-type budgets).
-        name: Budget name (e.g. "Mercado Mensal").
-        period: Budget period (monthly, weekly, yearly).
-        total_limit: Total spending limit for the period.
-        budget_type: "general" (conta/saldo) or "category" (limite por categoria).
-    """
+    """Budget model — defines a spending plan for a period."""
 
     __tablename__ = "budgets"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_uuid: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True,
-    )
-    user_id: Mapped[int | None] = mapped_column(
+    user_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("phone_users.id", ondelete="CASCADE"),
-        nullable=True,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
         index=True,
     )
     category_id: Mapped[int | None] = mapped_column(
@@ -46,36 +36,22 @@ class Budget(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     period: Mapped[str] = mapped_column(String(20), nullable=False)
     total_limit: Mapped[float] = mapped_column(Float, nullable=False)
-    budget_type: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="category"
-    )
+    budget_type: Mapped[str] = mapped_column(String(20), nullable=False, default="category")
+    budget_date: Mapped[date] = mapped_column(Date, nullable=False, default=date.today)
 
     # Relationships
-    phone_user: Mapped["PhoneUser"] = relationship("PhoneUser", back_populates="budgets")
-    category: Mapped["Category"] = relationship("Category", back_populates="budgets")
-    user: Mapped["User | None"] = relationship("User", back_populates="budgets")
+    user: Mapped[User] = relationship("User", back_populates="budgets")
+    category: Mapped[Category | None] = relationship("Category", back_populates="budgets")
     items: Mapped[list["BudgetItem"]] = relationship(
-        "BudgetItem",
-        back_populates="budget",
-        cascade="all, delete-orphan",
+        "BudgetItem", back_populates="budget", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<Budget(id={self.id}, name={self.name}, "
-            f"period={self.period}, limit={self.total_limit})>"
-        )
+        return f"<Budget(id={self.id}, name={self.name}, period={self.period}, limit={self.total_limit})>"
 
 
 class BudgetItem(Base):
-    """BudgetItem model — per-category limit within a budget.
-
-    Attributes:
-        id: Auto-increment primary key.
-        budget_id: FK to budgets.
-        category_id: FK to categories (optional).
-        limit_amount: Spending limit for this category.
-    """
+    """BudgetItem model — per-category limit within a budget."""
 
     __tablename__ = "budget_items"
 
@@ -94,8 +70,8 @@ class BudgetItem(Base):
     limit_amount: Mapped[float] = mapped_column(Float, nullable=False)
 
     # Relationships
-    budget: Mapped["Budget"] = relationship("Budget", back_populates="items")
-    category: Mapped["Category | None"] = relationship("Category", back_populates="budget_items")
+    budget: Mapped[Budget] = relationship("Budget", back_populates="items")
+    category: Mapped[Category | None] = relationship("Category", back_populates="budget_items")
 
     def __repr__(self) -> str:
         return f"<BudgetItem(id={self.id}, budget_id={self.budget_id}, limit={self.limit_amount})>"

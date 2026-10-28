@@ -1,0 +1,22 @@
+{
+  "arquivo": "uploads/nota_20260521_200428.jpeg",
+  "texto_ocr": null,
+  "dados_extraidos": {
+    "tipo": "despesa",
+    "valor_total": 5.99,
+    "data": "2014-04-01",
+    "estabelecimento": "Cruzeiro Automacao Comercial Ltda.",
+    "categoria": "Mercado",
+    "descricao": "Nota fiscal Cruzeiro Automacao Comercial Ltda.",
+    "itens": [
+      {
+        "nome": "Pao Frances",
+        "quantidade": 1,
+        "valor_unitario": 5.99,
+        "valor_total": 5.99
+      }
+    ],
+    "confianca": "alta",
+    "observacoes": "NFC-e emitida em ambiente de teste - sem valor fiscal."
+  }
+}

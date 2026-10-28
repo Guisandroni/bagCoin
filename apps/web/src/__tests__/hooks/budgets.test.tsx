@@ -23,10 +23,10 @@ vi.mock("@/lib/api-client", () => ({
       if (url.includes("budgets/1")) return Promise.resolve(mockBudgetSingle)
       return Promise.resolve(mockBudgets)
     }),
-    post: vi.fn().mockImplementation((_url: string, body: any) =>
+    post: vi.fn().mockImplementation((_url: string, body: Record<string, unknown>) =>
       Promise.resolve({ ...mockBudgetSingle, ...body, id: 99 })
     ),
-    patch: vi.fn().mockImplementation((_url: string, body: any) =>
+    patch: vi.fn().mockImplementation((_url: string, body: Record<string, unknown>) =>
       Promise.resolve({ ...mockBudgetSingle, ...body })
     ),
     delete: vi.fn().mockResolvedValue(undefined),

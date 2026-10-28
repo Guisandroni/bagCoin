@@ -3,8 +3,6 @@
 Contains business logic for report operations.
 """
 
-from uuid import UUID
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
@@ -19,7 +17,7 @@ class ReportService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_report(self, report_id: int, user_uuid: UUID | None = None) -> Report:
+    async def get_report(self, report_id: int, user_id: int | None = None) -> Report:
         """Get report by ID.
 
         Raises:
@@ -31,7 +29,7 @@ class ReportService:
                 message="Report not found",
                 details={"report_id": report_id},
             )
-        if user_uuid is not None and report.user_uuid is not None and report.user_uuid != user_uuid:
+        if user_id is not None and report.user_id != user_id:
             raise NotFoundError(
                 message="Report not found",
                 details={"report_id": report_id},
@@ -40,7 +38,7 @@ class ReportService:
 
     async def list_reports(
         self,
-        user_uuid: UUID | None = None,
+        user_id: int | None = None,
         *,
         skip: int = 0,
         limit: int = 50,
@@ -52,27 +50,25 @@ class ReportService:
         """
         items = await report_repo.get_reports_by_user(
             self.db,
-            user_uuid=user_uuid,
+            user_id=user_id,
             skip=skip,
             limit=limit,
         )
         total = await report_repo.count_reports(
             self.db,
-            user_uuid=user_uuid,
+            user_id=user_id,
         )
         return items, total
 
     async def create_report(
         self,
         data: ReportCreate,
-        user_uuid: UUID | None = None,
         user_id: int | None = None,
     ) -> Report:
         """Create a new report."""
         return await report_repo.create_report(
             self.db,
             user_id=user_id,
-            user_uuid=user_uuid,
             period_start=data.period_start,
             period_end=data.period_end,
             file_url=data.file_url,
@@ -81,14 +77,14 @@ class ReportService:
     async def delete_report(
         self,
         report_id: int,
-        user_uuid: UUID | None = None,
+        user_id: int | None = None,
     ) -> bool:
         """Delete a report.
 
         Raises:
             NotFoundError: If report does not exist or user has no access.
         """
-        await self.get_report(report_id, user_uuid=user_uuid)
+        await self.get_report(report_id, user_id=user_id)
         deleted = await report_repo.delete_report(self.db, report_id)
         if not deleted:
             raise NotFoundError(

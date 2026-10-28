@@ -11,8 +11,8 @@ vi.mock("@/lib/auth-store", () => ({
 }))
 
 vi.mock("@/lib/store", () => ({
-  useAppStore: (selector?: Function) => {
-    const state = {
+  useAppStore: (selector?: (state: AppStoreState) => unknown) => {
+    const state: AppStoreState = {
       openModal: vi.fn(),
       closeModal: vi.fn(),
       activeModal: null,
@@ -24,6 +24,16 @@ vi.mock("@/lib/store", () => ({
     return selector ? selector(state) : state
   },
 }))
+
+interface AppStoreState {
+  openModal: ReturnType<typeof vi.fn>
+  closeModal: ReturnType<typeof vi.fn>
+  activeModal: null
+  selectedTransaction: null
+  drawerOpen: boolean
+  openDrawer: ReturnType<typeof vi.fn>
+  closeDrawer: ReturnType<typeof vi.fn>
+}
 
 const mockPathname = vi.hoisted(() => "/app")
 vi.mock("next/navigation", () => ({

@@ -1,9 +1,4 @@
-"""Report repository (PostgreSQL async).
-
-Contains database operations for Report entities.
-"""
-
-from uuid import UUID
+"""Report repository (PostgreSQL async)."""
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,34 +7,29 @@ from app.db.models.report import Report
 
 
 async def get_report_by_id(db: AsyncSession, report_id: int) -> Report | None:
-    """Get report by ID."""
     return await db.get(Report, report_id)
 
 
 async def get_reports_by_user(
     db: AsyncSession,
-    user_uuid: UUID | None = None,
+    user_id: int,
     *,
     skip: int = 0,
     limit: int = 50,
 ) -> list[Report]:
-    """Get reports for a user with pagination."""
-    query = select(Report)
-    if user_uuid:
-        query = query.where(Report.user_uuid == user_uuid)
-    query = query.order_by(Report.created_at.desc()).offset(skip).limit(limit)
+    query = (
+        select(Report)
+        .where(Report.user_id == user_id)
+        .order_by(Report.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
     result = await db.execute(query)
     return list(result.scalars().all())
 
 
-async def count_reports(
-    db: AsyncSession,
-    user_uuid: UUID | None = None,
-) -> int:
-    """Count reports for a user."""
-    query = select(func.count(Report.id))
-    if user_uuid:
-        query = query.where(Report.user_uuid == user_uuid)
+async def count_reports(db: AsyncSession, user_id: int) -> int:
+    query = select(func.count(Report.id)).where(Report.user_id == user_id)
     result = await db.execute(query)
     return result.scalar() or 0
 
@@ -47,16 +37,13 @@ async def count_reports(
 async def create_report(
     db: AsyncSession,
     *,
-    user_id: int | None = None,
-    user_uuid: UUID | None = None,
+    user_id: int,
     period_start,
     period_end,
     file_url: str | None = None,
 ) -> Report:
-    """Create a new report."""
     report = Report(
         user_id=user_id,
-        user_uuid=user_uuid,
         period_start=period_start,
         period_end=period_end,
         file_url=file_url,
@@ -68,7 +55,6 @@ async def create_report(
 
 
 async def delete_report(db: AsyncSession, report_id: int) -> bool:
-    """Delete a report by ID."""
     report = await get_report_by_id(db, report_id)
     if report:
         await db.delete(report)

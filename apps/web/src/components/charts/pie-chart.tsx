@@ -19,12 +19,13 @@ export function DashboardPieChart({ data, size = 160, className }: DashboardPieC
   const total = data.reduce((s, d) => s + d.value, 0)
   if (total <= 0) return null
 
-  let cum = 0
-  const slices = data.map((d) => {
-    const start = cum
-    cum += d.value
-    return { ...d, start, end: cum }
-  })
+  const slices = data.reduce<Array<PieSlice & { start: number; end: number }>>(
+    (items, d) => {
+      const start = items.at(-1)?.end ?? 0
+      return [...items, { ...d, start, end: start + d.value }]
+    },
+    []
+  )
 
   const cx = size / 2
   const cy = size / 2

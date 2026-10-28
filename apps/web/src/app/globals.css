@@ -213,9 +213,9 @@
   --rls-inline-padding-md: 16px;
 
   /* ── Release radius tokens ── */
-  --rls-radius: 1.5rem;
-  --rls-radius-lg: 2rem;
-  --rls-radius-pill: 9999px;
+  --rls-radius: 4px;
+  --rls-radius-lg: 8px;
+  --rls-radius-pill: 8px;
 }
 
 @layer base {
@@ -224,6 +224,21 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  button,
+  [role="button"],
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  summary {
+    cursor: pointer;
+  }
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  input[type="button"]:disabled,
+  input[type="submit"]:disabled,
+  input[type="reset"]:disabled {
+    cursor: not-allowed;
   }
   html {
     @apply font-sans;
@@ -243,11 +258,9 @@
 @keyframes page-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 

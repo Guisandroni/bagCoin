@@ -20,14 +20,24 @@ export function LoginForm({ compact = false }: { compact?: boolean }) {
     try {
       await login(email, password)
       router.push("/app")
-    } catch {
+    } catch (error) {
+      const authError = error as Error & { code?: string; details?: { email?: string } }
+      if (authError.code === "EMAIL_NOT_VERIFIED") {
+        const pendingEmail = authError.details?.email || email
+        router.push(`/verify-email?email=${encodeURIComponent(pendingEmail)}&source=login`)
+        return
+      }
       // error is set in the store
     }
   }
 
   async function handleGoogleSuccess(idToken: string) {
     try {
-      await loginWithGoogle(idToken)
+      const result = await loginWithGoogle(idToken)
+      if (result.status === "pending") {
+        router.push(`/verify-email?email=${encodeURIComponent(result.pending.email)}&source=google`)
+        return
+      }
       router.push("/app")
     } catch {
       // error is set in the store

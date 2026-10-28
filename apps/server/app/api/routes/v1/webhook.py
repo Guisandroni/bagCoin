@@ -8,10 +8,12 @@ import base64
 import logging
 import os
 import re
+import secrets
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import FileResponse
 
-from app.agents.orchestrator import orchestrator
+from app.agents.graph import orchestrator
 from app.agents.persistence import get_or_create_user_sync
 from app.agents.tenant_context import tenant_phone_error
 from app.api.deps import verify_api_key as verify_telegram_api_key
@@ -58,20 +60,49 @@ def normalize_whatsapp_id(chat_id: str) -> str:
 
 
 def is_duplicate_message(message_id: str) -> bool:
-    """Retorna True se a mensagem já foi processada nos últimos 60 segundos."""
+    """Retorna True se a mensagem já foi processada nos últimos 60 segundos.
+
+    Uses atomic SET NX to prevent race conditions with multiple workers.
+    """
     r = _get_redis()
     if not message_id or not r:
         return False
     key = f"msg:processed:{message_id}"
-    if r.exists(key):
-        return True
-    r.setex(key, 60, "1")
-    return False
+    # SET NX is atomic: returns True only if the key was set (first caller wins)
+    was_set = r.set(key, "1", nx=True, ex=60)
+    return not was_set  # If was_set is False/None, key already existed → duplicate
+
+
+def _source_format_from_payload(message_type: str | None, media: dict | None = None) -> str:
+    """Normalize WhatsApp/bridge message types into BagCoin source formats."""
+    media_type = str((media or {}).get("mimetype") or "").lower()
+    raw_type = str(message_type or "").lower()
+
+    if media_type.startswith("audio/") or raw_type in {"ptt", "audio", "voice"}:
+        return "audio"
+    if media_type.startswith("image/") or raw_type in {"image", "sticker"}:
+        return "image"
+    if media_type or raw_type in {"document", "file"}:
+        return "document"
+    return "text"
 
 
 async def verify_api_key(x_api_key: str = Header(...)):
     """Verifica a API key do WhatsApp Bridge."""
     if x_api_key != settings.WHATSAPP_API_KEY:
+        raise HTTPException(status_code=401, detail="API Key inválida")
+    return x_api_key
+
+
+async def verify_any_bridge_api_key(x_api_key: str = Header(...)):
+    """Accept either WHATSAPP_API_KEY or the general API_KEY (used by bridges)."""
+    valid_keys = [
+        settings.WHATSAPP_API_KEY,
+        settings.API_KEY,
+    ]
+    if not any(
+        k and secrets.compare_digest(x_api_key, k) for k in valid_keys if isinstance(k, str)
+    ):
         raise HTTPException(status_code=401, detail="API Key inválida")
     return x_api_key
 
@@ -110,15 +141,7 @@ async def receive_whatsapp_message(
 
     try:
         # 3. Determina formato da fonte
-        source_format = (
-            "audio"
-            if payload.type in ["ptt", "audio"]
-            else "image"
-            if payload.type in ["image"]
-            else "document"
-            if payload.type in ["document"]
-            else "text"
-        )
+        source_format = _source_format_from_payload(payload.type, payload.media)
 
         # 4. Prepara estado inicial
         context = {"channel": "whatsapp"}
@@ -132,6 +155,7 @@ async def receive_whatsapp_message(
             "intent": None,
             "extracted_data": None,
             "query_result": None,
+            "report_id": None,
             "report_path": None,
             "report_summary": None,
             "response": None,
@@ -149,7 +173,10 @@ async def receive_whatsapp_message(
 
         # 6. Se um relatório PDF foi gerado, lê e inclui na resposta
         document = None
+        media = None
         report_path = result.get("report_path")
+        report_id = result.get("report_id")
+
         if report_path and os.path.exists(report_path):
             try:
                 with open(report_path, "rb") as f:
@@ -164,9 +191,25 @@ async def receive_whatsapp_message(
             except Exception as e:
                 logger.error(f"Erro ao ler PDF para envio: {e}")
 
+        # HTTP-based download link (preferred for Telegram bridge)
+        if report_id:
+            filename = (
+                os.path.basename(report_path)
+                if report_path
+                else f"relatorio_{report_id}.pdf"
+            )
+            base_url = getattr(settings, "INTERNAL_API_BASE_URL", None) or "http://app:8000"
+            media = {
+                "type": "document",
+                "url": f"{base_url}/api/v1/webhook/reports/{report_id}/download",
+                "filename": filename,
+                "mimetype": "application/pdf",
+            }
+
         return WhatsAppResponse(
             reply=response_text,
             document=document,
+            media=media,
             actions=[],
         )
 
@@ -193,11 +236,11 @@ async def receive_telegram_message(
         logger.warning(f"Telegram webhook rejeitado — telefone inválido: {phone_number!r}")
         return TelegramResponse(reply=f"⚠️ {terr}", actions=[])
 
-    # 2. Busca ou cria PhoneUser para garantir que existe
+    # 2. Busca ou cria usuário unificado para garantir que existe
     try:
         get_or_create_user_sync(phone_number)
     except Exception as e:
-        logger.error(f"Erro ao buscar/criar PhoneUser para {phone_number}: {e}")
+        logger.error(f"Erro ao buscar/criar usuário para {phone_number}: {e}")
         return TelegramResponse(
             reply="Erro ao identificar usuário. Tente novamente.",
             actions=[],
@@ -232,6 +275,7 @@ async def receive_telegram_message(
             "intent": None,
             "extracted_data": None,
             "query_result": None,
+            "report_id": None,
             "report_path": None,
             "report_summary": None,
             "response": None,
@@ -247,8 +291,27 @@ async def receive_telegram_message(
 
         logger.info(f"Resposta gerada para {phone_number}: {response_text[:100]}...")
 
+        # Attach media URL if a report was generated (Bug 8.2 fix)
+        media = None
+        report_id = result.get("report_id")
+        report_path = result.get("report_path")
+        if report_id:
+            filename = (
+                os.path.basename(report_path)
+                if report_path
+                else f"relatorio_{report_id}.pdf"
+            )
+            base_url = getattr(settings, "INTERNAL_API_BASE_URL", None) or "http://app:8000"
+            media = {
+                "type": "document",
+                "url": f"{base_url}/api/v1/webhook/reports/{report_id}/download",
+                "filename": filename,
+                "mimetype": "application/pdf",
+            }
+
         return TelegramResponse(
             reply=response_text,
+            media=media,
             actions=[],
         )
 
@@ -266,3 +329,34 @@ async def webhook_health():
     r = _get_redis()
     redis_status = "ok" if (r and r.ping()) else "unavailable"
     return {"status": "ok", "service": "webhook", "redis": redis_status}
+
+
+@router.get("/reports/{report_id}/download")
+async def download_internal_report(
+    report_id: int,
+    _: str = Depends(verify_any_bridge_api_key),
+):
+    """Download endpoint for bridges (Bug 8.2 fix).
+
+    Accepts either WHATSAPP_API_KEY or API_KEY — each bridge uses its own.
+    Streams the PDF file. No per-user auth here because the URL only comes
+    from orchestrator responses where ownership was already enforced.
+    """
+    from app.db.session import sync_session_maker
+    from app.services.report_sync import get_report_sync
+
+    db = sync_session_maker()
+    try:
+        report = get_report_sync(db, report_id)
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+        if not report.file_url or not os.path.exists(report.file_url):
+            raise HTTPException(status_code=404, detail="Report file missing on disk")
+        filename = os.path.basename(report.file_url)
+        return FileResponse(
+            path=report.file_url,
+            media_type="application/pdf",
+            filename=filename,
+        )
+    finally:
+        db.close()

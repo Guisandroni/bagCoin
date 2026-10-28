@@ -15,22 +15,13 @@ if TYPE_CHECKING:
 
 
 class Conversation(Base, TimestampMixin):
-    """Conversation model - groups messages in a chat session.
-
-    Attributes:
-        id: Unique conversation identifier
-        user_id: Optional user who owns this conversation (if auth enabled)
-        project_id: Optional project this conversation belongs to (if pydantic_deep)
-        title: Auto-generated or user-defined title
-        is_archived: Whether the conversation is archived
-        messages: List of messages in this conversation
-    """
+    """Conversation model - groups messages in a chat session."""
 
     __tablename__ = "conversations"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
+    user_id: Mapped[int | None] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
@@ -51,17 +42,7 @@ class Conversation(Base, TimestampMixin):
 
 
 class Message(Base, TimestampMixin):
-    """Message model - individual message in a conversation.
-
-    Attributes:
-        id: Unique message identifier
-        conversation_id: The conversation this message belongs to
-        role: Message role (user, assistant, system)
-        content: Message text content
-        model_name: AI model used (for assistant messages)
-        tokens_used: Token count for this message
-        tool_calls: List of tool calls made in this message
-    """
+    """Message model - individual message in a conversation."""
 
     __tablename__ = "messages"
 
@@ -72,7 +53,7 @@ class Message(Base, TimestampMixin):
         nullable=False,
         index=True,
     )
-    role: Mapped[str] = mapped_column(String(20), nullable=False)  # user, assistant, system
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     model_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     tokens_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -96,20 +77,7 @@ class Message(Base, TimestampMixin):
 
 
 class ToolCall(Base):
-    """ToolCall model - record of a tool invocation.
-
-    Attributes:
-        id: Unique tool call identifier
-        message_id: The assistant message that triggered this call
-        tool_call_id: External ID from PydanticAI
-        tool_name: Name of the tool that was called
-        args: JSON arguments passed to the tool
-        result: Result returned by the tool
-        status: Current status (pending, running, completed, failed)
-        started_at: When the tool call started
-        completed_at: When the tool call completed
-        duration_ms: Execution time in milliseconds
-    """
+    """ToolCall model - record of a tool invocation."""
 
     __tablename__ = "tool_calls"
 
@@ -124,9 +92,7 @@ class ToolCall(Base):
     tool_name: Mapped[str] = mapped_column(String(100), nullable=False)
     args: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="pending"
-    )  # pending, running, completed, failed
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)

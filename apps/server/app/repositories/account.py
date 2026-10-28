@@ -1,22 +1,20 @@
 """Account repository (PostgreSQL async)."""
 
 from typing import Any
-from uuid import UUID
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.account import Account
 
 
-async def get_by_id(db: AsyncSession, account_id: UUID) -> Account | None:
+async def get_by_id(db: AsyncSession, account_id: int) -> Account | None:
     """Get account by ID."""
     return await db.get(Account, account_id)
 
 
 async def get_multi_by_user(
     db: AsyncSession,
-    user_id: UUID,
+    user_id: int,
     *,
     skip: int = 0,
     limit: int = 50,
@@ -34,7 +32,7 @@ async def get_multi_by_user(
 async def create(
     db: AsyncSession,
     *,
-    user_id: UUID,
+    user_id: int,
     name: str,
     bank: str,
     type: str = "CHECKING",
@@ -73,7 +71,7 @@ async def update(
     return db_account
 
 
-async def delete(db: AsyncSession, account_id: UUID) -> Account | None:
+async def delete(db: AsyncSession, account_id: int) -> Account | None:
     """Delete an account by ID."""
     account = await get_by_id(db, account_id)
     if account:

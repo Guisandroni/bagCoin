@@ -5,7 +5,7 @@ description = "A FastAPI project"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
-    { name = "guisandroni", email = "gui.sandroni@email.com" },
+    { name = "guisandroni", email = "gui.sandroni@gmail.com" },
 ]
 
 dependencies = [
@@ -25,6 +25,7 @@ dependencies = [
     "bcrypt>=4.0.0",
     "python-multipart>=0.0.12",
     "redis>=5.2.0",
+    "sqladmin>=0.21.0",
     "fastapi-pagination>=0.12.31",
     "celery[redis]>=5.6.0",
     "flower>=2.0.0",
@@ -35,9 +36,12 @@ dependencies = [
     "langsmith>=0.4.0",
     "langchain-groq>=0.2.0",
     "httpx>=0.27.0",
+    "itsdangerous>=2.2.0",
+    "aiosmtplib>=3.0.0",
     "reportlab>=4.2.0",
     "groq>=0.13.0",
     "PyPDF2>=3.0.0",
+    "pymupdf>=1.24.0",
     "duckduckgo_search>=7.0.0",
     "pillow>=11.0.0",
     "python-dateutil>=2.9.0",
@@ -46,6 +50,7 @@ dependencies = [
     "tqdm>=4.66.0",
     "langchain-nvidia-ai-endpoints>=1.2.1",
     "google-auth>=2.36.0",
+    "google-genai>=1.0.0",
     "pytest-asyncio>=1.3.0",
 ]
 
@@ -148,6 +153,10 @@ invalid-type-form = "warn"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: tests that require real PostgreSQL and Redis (slow)",
+    "real_image_extraction: tests that call Gemini with real image examples",
+]
 
 [tool.coverage.run]
 source = ["app"]

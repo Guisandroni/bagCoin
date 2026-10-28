@@ -52,3 +52,54 @@
   font-weight: 600;
   line-height: 14px;
 }
+
+/* ── Radius normalization for release UI ── */
+.rls .rounded-xl,
+.rls .rounded-2xl,
+.rls .rounded-3xl {
+  border-radius: var(--rls-radius-lg);
+}
+
+/* Stable CSS for mobile floating navbar. Tailwind arbitrary calc/max classes
+   can be fragile across generated builds, so critical positioning lives here. */
+.rls-floating-bottom-nav {
+  position: fixed;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  width: calc(min(100%, 28rem) - 32px);
+  transform: translateX(-50%);
+  z-index: 50;
+  pointer-events: auto;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--rls-surface-container-lowest) 80%, transparent);
+  box-shadow: 0 10px 30px rgba(27, 28, 30, 0.14);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.rls-drawer-backdrop {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  width: min(100%, 28rem);
+  height: calc(100dvh - 72px);
+  transform: translateX(-50%);
+  z-index: 35;
+  background: rgba(27, 28, 30, 0.34);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.rls-drawer-panel {
+  position: fixed;
+  top: 72px;
+  left: calc(50% - min(100%, 28rem) / 2);
+  width: min(82vw, 23rem);
+  height: calc(100dvh - 72px);
+  z-index: 35;
+  overflow: hidden;
+  border-right: 1px solid var(--rls-outline-variant);
+  background: var(--rls-surface-container-lowest);
+  box-shadow: 0 18px 40px rgba(27, 28, 30, 0.16);
+}

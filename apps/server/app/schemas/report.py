@@ -1,7 +1,6 @@
 """Report Pydantic schemas."""
 
 from datetime import datetime
-from uuid import UUID
 
 from pydantic import Field
 
@@ -35,7 +34,6 @@ class ReportResponse(ReportBase, TimestampSchema):
 
     id: int
     user_id: int | None = None
-    user_uuid: UUID | None = None
 
 
 class ReportGenerateRequest(BaseSchema):

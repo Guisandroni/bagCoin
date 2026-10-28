@@ -5,7 +5,10 @@ Converts natural language queries to safe SQL using the sync engine.
 
 import logging
 import re
-from datetime import datetime, UTC, timedelta
+import unicodedata
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
+from calendar import monthrange
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -18,15 +21,82 @@ from app.services.llm_service import get_llm
 
 logger = logging.getLogger(__name__)
 
+
+MONTHS_PT = {
+    "jan": 1,
+    "janeiro": 1,
+    "fev": 2,
+    "fevereiro": 2,
+    "mar": 3,
+    "marco": 3,
+    "março": 3,
+    "abr": 4,
+    "abril": 4,
+    "mai": 5,
+    "maio": 5,
+    "jun": 6,
+    "junho": 6,
+    "jul": 7,
+    "julho": 7,
+    "ago": 8,
+    "agosto": 8,
+    "set": 9,
+    "setembro": 9,
+    "out": 10,
+    "outubro": 10,
+    "nov": 11,
+    "novembro": 11,
+    "dez": 12,
+    "dezembro": 12,
+}
+
+MONTH_LABELS_PT = {
+    1: "janeiro",
+    2: "fevereiro",
+    3: "março",
+    4: "abril",
+    5: "maio",
+    6: "junho",
+    7: "julho",
+    8: "agosto",
+    9: "setembro",
+    10: "outubro",
+    11: "novembro",
+    12: "dezembro",
+}
+
+
+@dataclass(frozen=True)
+class FinancialQueryPeriod:
+    """Resolved period used by SQL queries and report generation."""
+
+    start: date | None
+    end: date | None
+    label: str
+
+    @property
+    def sql_clause(self) -> str | None:
+        if self.start and self.end:
+            return f"DATE(transaction_date) BETWEEN '{self.start.isoformat()}' AND '{self.end.isoformat()}'"
+        if self.start:
+            return f"DATE(transaction_date) >= '{self.start.isoformat()}'"
+        if self.end:
+            return f"DATE(transaction_date) <= '{self.end.isoformat()}'"
+        return None
+
+
+def normalize_query_text(text: str) -> str:
+    return unicodedata.normalize("NFKD", text.lower()).encode("ASCII", "ignore").decode("ASCII")
+
 DB_SCHEMA = """
 Tabelas:
-- phone_users(id, phone_number, name, status, preferences, financial_profile, created_at, updated_at)
+- users(id, phone_number, full_name, status, preferences, financial_profile, created_at, updated_at)
 - transactions(id, user_id, type, amount, currency, category_id, description, source_format, transaction_date, created_at, updated_at, confidence_score, raw_input)
 - categories(id, user_id, name, parent_category_id, is_default, created_at, updated_at)
 
 Relacionamentos:
-- transactions.user_id -> phone_users.id
-- categories.user_id -> phone_users.id
+- transactions.user_id -> users.id
+- categories.user_id -> users.id
 - transactions.category_id -> categories.id
 
 Tipos de transação (USE SEMPRE MAIÚSCULO no SQL): EXPENSE, INCOME, TRANSFER, ADJUSTMENT
@@ -75,8 +145,8 @@ def validate_user_filter(sql: str, phone_number: str) -> bool:
     pattern = (
         r"(?:[a-z_]+\.)?\s*USER_ID\s*"
         r"(?:=|IN)\s*"
-        r"\(?\s*SELECT\s+(?:ID\s+FROM\s+(?:USERS|PHONE_USERS)\s+"
-        r"|DISTINCT\s+ID\s+FROM\s+(?:USERS|PHONE_USERS)\s+)"
+        r"\(?\s*SELECT\s+(?:ID\s+FROM\s+USERS\s+"
+        r"|DISTINCT\s+ID\s+FROM\s+USERS\s+)"
         r"WHERE\s+(?:PHONE_NUMBER|PHONE)\s*(?:=|LIKE|ILIKE|IN)"
     )
     return bool(re.search(pattern, sql_normalized, re.IGNORECASE))
@@ -88,7 +158,7 @@ def sanitize_sql_enums(sql: str) -> str:
         r"'expense'": "'EXPENSE'",
         r"'income'": "'INCOME'",
         r"'transfer'": "'TRANSFER'",
-        r"'adjustment'": "'ADJUSMENT'",
+        r"'adjustment'": "'ADJUSTMENT'",
     }
     for pattern, replacement in replacements.items():
         sql = re.sub(pattern, replacement, sql, flags=re.IGNORECASE)
@@ -108,36 +178,217 @@ def execute_sql_query(query: str, params: dict | None = None) -> list[dict[str, 
         return rows
 
 
-def get_date_filter(msg_lower: str) -> str | None:
-    """Return WHERE date clause based on the user's message."""
-    today = datetime.now(UTC).date()
+def _current_report_date() -> date:
+    try:
+        from app.services.report_time import report_now
 
-    if any(p in msg_lower for p in ["hoje"]):
-        return f"DATE(transaction_date) = '{today}'"
+        return report_now().date()
+    except Exception:
+        return datetime.now(UTC).date()
 
-    if any(p in msg_lower for p in ["ontem"]):
-        yesterday = today - timedelta(days=1)
-        return f"DATE(transaction_date) = '{yesterday}'"
 
-    if any(p in msg_lower for p in ["esta semana", "essa semana", "ultimos 7 dias", "semana"]):
-        week_ago = today - timedelta(days=7)
-        return f"transaction_date >= '{week_ago}'"
+def _month_period(month: int, year: int) -> FinancialQueryPeriod:
+    last_day = monthrange(year, month)[1]
+    label = f"{MONTH_LABELS_PT[month]} de {year}"
+    return FinancialQueryPeriod(
+        start=date(year, month, 1),
+        end=date(year, month, last_day),
+        label=label,
+    )
 
-    if any(p in msg_lower for p in ["ultimos 30 dias", "ultimo mes", "mes passado"]):
-        return "transaction_date >= CURRENT_DATE - INTERVAL '30 days'"
 
-    if any(p in msg_lower for p in ["esse mes", "este mes", "mes atual", "mes corrente"]):
-        return "transaction_date >= date_trunc('month', CURRENT_DATE)"
-
-    if any(p in msg_lower for p in ["esse ano", "este ano", "ano atual"]):
-        return "transaction_date >= date_trunc('year', CURRENT_DATE)"
+def resolve_financial_query_period(
+    message: str,
+    *,
+    today: date | None = None,
+) -> FinancialQueryPeriod:
+    """Resolve a natural-language financial query period for SQL and reports."""
+    today = today or _current_report_date()
+    msg_norm = normalize_query_text(message)
 
     if any(
-        p in msg_lower for p in ["ja gastei", "ate agora", "total", "quanto gastei"]
-    ) and not any(p in msg_lower for p in ["hoje", "ontem", "semana", "mes", "ano"]):
-        return "transaction_date >= date_trunc('month', CURRENT_DATE)"
+        marker in msg_norm
+        for marker in (
+            "todo tempo",
+            "todos os tempos",
+            "todas minhas financas",
+            "todas as minhas financas",
+            "historico completo",
+            "desde o inicio",
+            "desde que comecei",
+        )
+    ):
+        return FinancialQueryPeriod(start=None, end=None, label="todo histórico")
 
-    return None
+    month_names = "|".join(sorted(MONTHS_PT, key=len, reverse=True))
+    month_match = re.search(
+        rf"\b({month_names})\b(?:\s*(?:de|/|-)?\s*(20\d{{2}}))?",
+        msg_norm,
+    )
+    if month_match:
+        month = MONTHS_PT[month_match.group(1)]
+        year = int(month_match.group(2) or today.year)
+        return _month_period(month, year)
+
+    explicit_year_match = re.search(r"\b(20\d{2})\b", msg_norm)
+    requested_year = int(explicit_year_match.group(1)) if explicit_year_match else today.year
+    if any(
+        marker in msg_norm
+        for marker in (
+            "todo ano",
+            "ano todo",
+            "ano inteiro",
+            "ano completo",
+            "este ano",
+            "esse ano",
+            "ano atual",
+            "ano de",
+        )
+    ):
+        end = today if requested_year == today.year else date(requested_year, 12, 31)
+        return FinancialQueryPeriod(
+            start=date(requested_year, 1, 1),
+            end=end,
+            label=f"ano de {requested_year}",
+        )
+
+    if "hoje" in msg_norm:
+        return FinancialQueryPeriod(start=today, end=today, label="hoje")
+
+    if "ontem" in msg_norm:
+        yesterday = today - timedelta(days=1)
+        return FinancialQueryPeriod(start=yesterday, end=yesterday, label="ontem")
+
+    if any(marker in msg_norm for marker in ("esta semana", "essa semana", "ultimos 7 dias", "semana")):
+        return FinancialQueryPeriod(
+            start=today - timedelta(days=7),
+            end=today,
+            label="últimos 7 dias",
+        )
+
+    if any(marker in msg_norm for marker in ("ultimos 30 dias", "ultimos trinta dias")):
+        return FinancialQueryPeriod(
+            start=today - timedelta(days=30),
+            end=today,
+            label="últimos 30 dias",
+        )
+
+    if any(marker in msg_norm for marker in ("mes passado", "ultimo mes")):
+        first_this_month = today.replace(day=1)
+        end = first_this_month - timedelta(days=1)
+        start = end.replace(day=1)
+        return FinancialQueryPeriod(start=start, end=end, label="mês passado")
+
+    if any(marker in msg_norm for marker in ("esse mes", "este mes", "mes atual", "mes corrente", "mes")):
+        return FinancialQueryPeriod(
+            start=today.replace(day=1),
+            end=today,
+            label="este mês",
+        )
+
+    if any(
+        marker in msg_norm
+        for marker in ("ja gastei", "ate agora", "total", "quanto gastei")
+    ) and not any(marker in msg_norm for marker in ("hoje", "ontem", "semana", "mes", "ano")):
+        return FinancialQueryPeriod(
+            start=today.replace(day=1),
+            end=today,
+            label="este mês",
+        )
+
+    return FinancialQueryPeriod(
+        start=today.replace(day=1),
+        end=today,
+        label="este mês",
+    )
+
+
+# ── LLM-based period resolution (fallback) ────────────────────────────
+
+_PERIOD_LLM_PROMPT = """Você é um parser de datas. Dada uma mensagem e a data de hoje, extraia o período financeiro.
+
+Data de hoje: {today}
+
+Responda APENAS JSON: {{"start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "label": "descrição"}}
+
+Exemplos:
+- "mes 2" (hoje=2026-05-25) → {{"start_date": "2026-02-01", "end_date": "2026-02-28", "label": "fevereiro de 2026"}}
+- "mes 02 de 2025" → {{"start_date": "2025-02-01", "end_date": "2025-02-28", "label": "fevereiro de 2025"}}
+- "de janeiro a março" (hoje=2026-05-25) → {{"start_date": "2026-01-01", "end_date": "2026-03-31", "label": "janeiro a março de 2026"}}
+- "últimos 3 meses" (hoje=2026-05-25) → {{"start_date": "2026-02-25", "end_date": "2026-05-25", "label": "últimos 3 meses"}}
+- "mes 12 de 2025" → {{"start_date": "2025-12-01", "end_date": "2025-12-31", "label": "dezembro de 2025"}}
+
+Regras:
+- Mês por número ("mes 2", "mês 02") → mês daquele número no ano atual ou especificado.
+- Use último dia correto do mês para end_date (28, 29, 30 ou 31).
+- Se não conseguir: {{"start_date": null, "end_date": null, "label": null}}"""
+
+
+def _has_period_indicators(msg_norm: str) -> bool:
+    """Check if message has period indicators the deterministic parser might have missed."""
+    patterns = [
+        r"mes\s*\d+",
+        r"de\s+\w+\s+a\s+\w+",
+        r"ultimos?\s+\d+\s+mes",
+        r"trimestre",
+        r"semestre",
+    ]
+    return any(re.search(p, msg_norm) for p in patterns)
+
+
+def resolve_period_with_llm(
+    message: str,
+    *,
+    today: date | None = None,
+) -> FinancialQueryPeriod | None:
+    """Use LLM to resolve a period from natural language. Returns None on failure."""
+    today = today or _current_report_date()
+    llm = get_llm(temperature=0)
+    if not llm:
+        return None
+    try:
+        prompt = _PERIOD_LLM_PROMPT.format(today=today.isoformat())
+        messages = [
+            SystemMessage(content=prompt),
+            HumanMessage(content=message),
+        ]
+        response = llm.invoke(messages)
+        result = JsonOutputParser().parse(response.content)
+        start_str = result.get("start_date")
+        end_str = result.get("end_date")
+        label = result.get("label")
+        if not start_str or not end_str or not label:
+            return None
+        return FinancialQueryPeriod(
+            start=date.fromisoformat(start_str),
+            end=date.fromisoformat(end_str),
+            label=label,
+        )
+    except Exception as e:
+        logger.warning(f"[resolve_period_with_llm] Failed: {e}")
+        return None
+
+
+def resolve_period_smart(
+    message: str,
+    *,
+    today: date | None = None,
+) -> FinancialQueryPeriod:
+    """Smart period resolution: deterministic parser first, LLM fallback for unrecognized patterns."""
+    today = today or _current_report_date()
+    result = resolve_financial_query_period(message, today=today)
+    if result.label == "este mês":
+        msg_norm = normalize_query_text(message)
+        if _has_period_indicators(msg_norm):
+            llm_result = resolve_period_with_llm(message, today=today)
+            if llm_result is not None:
+                return llm_result
+    return result
+
+
+def get_date_filter(msg_lower: str) -> str | None:
+    """Return WHERE date clause based on the user's message."""
+    return resolve_financial_query_period(msg_lower).sql_clause
 
 
 def _period_label(date_clause: str) -> str:
@@ -157,15 +408,46 @@ def _period_label(date_clause: str) -> str:
     return ""
 
 
+def build_financial_transactions_query(message: str) -> tuple[str, str, FinancialQueryPeriod]:
+    """Build the canonical SQL used by reports to fetch financial transactions."""
+    period = resolve_period_smart(message)
+    date_sql = f" AND {period.sql_clause}" if period.sql_clause else ""
+    sql = (
+        "SELECT "
+        "t.id, t.transaction_date, t.type, t.amount, t.description, "
+        "t.category_id, COALESCE(c.name, 'Outros') AS category, t.source_format "
+        "FROM transactions t "
+        "LEFT JOIN categories c ON t.category_id = c.id "
+        "WHERE t.user_id = (SELECT id FROM users WHERE phone_number = :phone_number)"
+        f"{date_sql} "
+        "ORDER BY t.transaction_date DESC NULLS LAST, t.id DESC"
+    )
+    return sql, f"Transações financeiras - {period.label}", period
+
+
+def fetch_financial_transactions_for_query(message: str, phone_number: str) -> dict[str, Any]:
+    """Execute the canonical text-to-SQL transaction query for reports."""
+    sql, description, period = build_financial_transactions_query(message)
+    if not validate_user_filter(sql, phone_number):
+        raise ValueError("Missing user_id filter")
+    rows = execute_sql_query(sql, {"phone_number": phone_number})
+    return {
+        "sql": sql,
+        "description": description,
+        "period": period,
+        "rows": rows,
+    }
+
+
 def get_fallback_query(message: str, phone_number: str) -> tuple[str | None, str | None]:
     """Try to map common queries to SQL without LLM."""
-    import unicodedata
-
     msg_lower = message.lower()
-    msg_norm = unicodedata.normalize("NFKD", msg_lower).encode("ASCII", "ignore").decode("ASCII")
-    user_filter = "user_id = (SELECT id FROM phone_users WHERE phone_number = :phone_number)"
-    date_clause = get_date_filter(msg_lower)
+    msg_norm = normalize_query_text(msg_lower)
+    user_filter = "user_id = (SELECT id FROM users WHERE phone_number = :phone_number)"
+    period = resolve_period_smart(message)
+    date_clause = period.sql_clause
     date_sql = f" AND {date_clause}" if date_clause else ""
+    description_period = f" ({period.label})" if period.label else ""
 
     def _in(keywords):
         return any(kw in msg_lower for kw in keywords) or any(kw in msg_norm for kw in keywords)
@@ -184,8 +466,7 @@ def get_fallback_query(message: str, phone_number: str) -> tuple[str | None, str
     ]
     if _in(expense_phrases):
         sql = f"SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE {user_filter} AND type = 'EXPENSE'{date_sql}"
-        period_label = _period_label(date_clause)
-        return sql, f"Total de gastos{period_label}"
+        return sql, f"Total de gastos{description_period}"
 
     # Total income
     income_phrases = [
@@ -200,8 +481,7 @@ def get_fallback_query(message: str, phone_number: str) -> tuple[str | None, str
     ]
     if _in(income_phrases):
         sql = f"SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE {user_filter} AND type = 'INCOME'{date_sql}"
-        period_label = _period_label(date_clause)
-        return sql, f"Total de receitas{period_label}"
+        return sql, f"Total de receitas{description_period}"
 
     # Balance
     if _in(["saldo", "quanto sobrou", "diferenca", "balanco"]):

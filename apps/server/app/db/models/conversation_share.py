@@ -1,9 +1,9 @@
-"""ConversationShare model — sharing conversations between users (PostgreSQL async)."""
+"""ConversationShare model — sharing conversations between users."""
 
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -26,21 +26,19 @@ class ConversationShare(Base):
         nullable=False,
         index=True,
     )
-    shared_by: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    shared_by: Mapped[int] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    shared_with: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
+    shared_with: Mapped[int | None] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
     )
     share_token: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
-    permission: Mapped[str] = mapped_column(
-        String(10), nullable=False, default="view"
-    )  # view | edit
+    permission: Mapped[str] = mapped_column(String(10), nullable=False, default="view")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

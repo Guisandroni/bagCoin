@@ -14,4 +14,6 @@ export const config: Config = {
   dedupTtlMs: 30 * 1000,          // 30s
   maxReplyLength: 4000,            // caracteres por chunk
   webhookTimeout: 120_000,         // 2min
+  sendSeen: false,                 // não marca como lido (sem ✓✓ azul)
+  showTyping: true,                // mostra "digitando..." durante processamento
 };

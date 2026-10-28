@@ -54,7 +54,7 @@ export function useCreateAccount() {
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_CREATE)
       console.error('[hook:accounts]', err)
-      toast.error(err.message || "Erro ao criar conta", { id: TOAST_ID_CREATE })
+      toast.error("Não foi possível criar a conta. Tente novamente.", { id: TOAST_ID_CREATE })
     },
   })
 }
@@ -74,7 +74,7 @@ export function useUpdateAccount() {
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_UPDATE)
       console.error('[hook:accounts]', err)
-      toast.error(err.message || "Erro ao atualizar conta", { id: TOAST_ID_UPDATE })
+      toast.error("Não foi possível atualizar a conta. Tente novamente.", { id: TOAST_ID_UPDATE })
     },
   })
 }
@@ -94,7 +94,7 @@ export function useDeleteAccount() {
     onError: (err: Error) => {
       toast.dismiss(TOAST_ID_DELETE)
       console.error('[hook:accounts]', err)
-      toast.error(err.message || "Erro ao excluir conta", { id: TOAST_ID_DELETE })
+      toast.error("Não foi possível excluir a conta. Tente novamente.", { id: TOAST_ID_DELETE })
     },
   })
 }

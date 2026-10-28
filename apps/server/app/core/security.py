@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import bcrypt
+import httpx
 import jwt
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
@@ -83,4 +84,29 @@ def verify_google_token(token: str) -> dict[str, Any] | None:
         )
         return id_info
     except ValueError:
+        return None
+
+
+async def verify_google_access_token(token: str) -> dict[str, Any] | None:
+    """Verify a Google OAuth access token and return a normalized payload."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                "https://oauth2.googleapis.com/tokeninfo",
+                params={"access_token": token},
+            )
+        if response.status_code != 200:
+            return None
+
+        payload = response.json()
+        if payload.get("aud") != settings.GOOGLE_CLIENT_ID:
+            return None
+
+        return {
+            "sub": payload.get("sub") or payload.get("user_id"),
+            "email": payload.get("email"),
+            "name": payload.get("name"),
+            "picture": payload.get("picture"),
+        }
+    except (httpx.HTTPError, ValueError):
         return None

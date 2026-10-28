@@ -16,10 +16,9 @@ from app.db.models.message_rating import MessageRating  # noqa: F401
 from app.db.models.chat_file import ChatFile  # noqa: F401
 from app.db.models.conversation_share import ConversationShare  # noqa: F401
 
-# BagCoin models
-from app.db.models.phone_user import PhoneUser  # noqa: F401
 from app.db.models.category import Category  # noqa: F401
 from app.db.models.transaction import Transaction  # noqa: F401
+from app.db.models.recurring_transaction import RecurringTransaction  # noqa: F401
 from app.db.models.budget import Budget, BudgetItem  # noqa: F401
 from app.db.models.goal import Goal  # noqa: F401
 from app.db.models.report import Report  # noqa: F401

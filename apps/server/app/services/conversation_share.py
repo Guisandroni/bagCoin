@@ -21,7 +21,7 @@ class ConversationShareService:
     async def check_edit_permission(
         self,
         conversation_id: UUID,
-        user_id: UUID,
+        user_id: int,
     ) -> None:
         """Verify the user is the owner or has an 'edit' share.
 
@@ -48,9 +48,9 @@ class ConversationShareService:
     async def share_conversation(
         self,
         conversation_id: UUID,
-        shared_by: UUID,
+        shared_by: int,
         *,
-        shared_with: UUID | None = None,
+        shared_with: int | None = None,
         generate_link: bool = False,
         permission: str = "view",
     ) -> dict:
@@ -105,7 +105,7 @@ class ConversationShareService:
         )
         return {"share": share}
 
-    async def list_shares(self, conversation_id: UUID, user_id: UUID) -> list:
+    async def list_shares(self, conversation_id: UUID, user_id: int) -> list:
         """List all shares for a conversation. Owner only."""
         conv = await conversation_repo.get_conversation_by_id(self.db, conversation_id)
         if not conv:
@@ -115,7 +115,7 @@ class ConversationShareService:
 
         return await conversation_share_repo.get_shares_for_conversation(self.db, conversation_id)
 
-    async def revoke_share(self, share_id: UUID, user_id: UUID) -> None:
+    async def revoke_share(self, share_id: UUID, user_id: int) -> None:
         """Revoke a share. Owner of conversation or the shared_with user can revoke."""
         share = await conversation_share_repo.get_by_id(self.db, share_id)
         if not share:
@@ -128,7 +128,7 @@ class ConversationShareService:
         await conversation_share_repo.delete(self.db, share_id)
 
     async def list_shared_with_me(
-        self, user_id: UUID, *, skip: int = 0, limit: int = 50
+        self, user_id: int, *, skip: int = 0, limit: int = 50
     ) -> tuple[list, int]:
         """List conversations shared with the current user."""
         items = await conversation_share_repo.get_conversations_shared_with_user(

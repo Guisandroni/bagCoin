@@ -145,9 +145,20 @@ async def test_upload_file(
     assert data["file_type"] == "text"
 
     # Verify validation was called
-    mock_file_upload_service.validate_upload.assert_called_once_with("text/plain", 13)
+    mock_file_upload_service.validate_upload.assert_called_once_with("text/plain", 13, "hello.txt")
 
     app.dependency_overrides.pop(get_file_upload_service, None)
+
+
+def test_validate_upload_accepts_ofx_mime_and_extension():
+    assert FileUploadService.validate_upload("application/ofx", 10, "extrato.ofx") == (True, None)
+    assert FileUploadService.validate_upload("text/ofx", 10, "extrato.ofx") == (True, None)
+    assert FileUploadService.validate_upload("application/x-ofx", 10, "extrato.ofx") == (True, None)
+    assert FileUploadService.validate_upload("application/octet-stream", 10, "extrato.ofx") == (
+        True,
+        None,
+    )
+    assert FileUploadService.classify_file("application/octet-stream", "extrato.ofx") == "text"
 
 
 @pytest.mark.anyio
@@ -290,5 +301,42 @@ async def test_get_file_info(
     assert data["file_type"] == "text"
     assert data["size"] == 42
     assert data["user_id"] == str(mock_user.id)
+
+    app.dependency_overrides.pop(get_file_upload_service, None)
+
+
+@pytest.mark.anyio
+async def test_list_files(
+    client_with_auth,
+    mock_file_upload_service,
+):
+    """GET /files lists latest user files."""
+    app.dependency_overrides[get_file_upload_service] = lambda: mock_file_upload_service
+
+    user_id = uuid4()
+    file_id = uuid4()
+    now = datetime.now(UTC)
+    mock_file_upload_service.list_user_files = AsyncMock(
+        return_value=[
+            MagicMock(
+                id=file_id,
+                filename="extrato.docx",
+                mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                size=1234,
+                file_type="docx",
+                created_at=now,
+                user_id=user_id,
+            )
+        ]
+    )
+
+    response = await client_with_auth.get(f"{settings.API_V1_STR}/files")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == str(file_id)
+    assert data[0]["filename"] == "extrato.docx"
+    assert data[0]["file_type"] == "docx"
 
     app.dependency_overrides.pop(get_file_upload_service, None)

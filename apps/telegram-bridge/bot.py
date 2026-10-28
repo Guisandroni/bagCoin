@@ -80,9 +80,49 @@ def send_message(chat_id: int, text: str) -> bool:
         with httpx.Client(timeout=15) as client:
             resp = client.post(url, json=payload)
             resp.raise_for_status()
-            return resp.json().get("ok", False)
+            data = resp.json()
+            ok = data.get("ok", False)
+            if not ok:
+                logger.error("Telegram sendMessage returned ok=false: %s", data)
+            return ok
+    except httpx.HTTPStatusError as exc:
+        body = exc.response.text[:500] if exc.response is not None else ""
+        logger.error("Telegram sendMessage HTTP error: %s body=%s", exc, body)
+        return False
     except httpx.RequestError as exc:
         logger.error("Failed to send message: %s", exc)
+        return False
+
+
+def send_document_from_url(
+    chat_id: int,
+    url: str,
+    filename: str,
+    caption: str = "",
+) -> bool:
+    """Download a document from the backend and forward it to Telegram.
+
+    Uses API_KEY on the GET to the backend, then POSTs multipart to Telegram.
+    """
+    if not API_BASE:
+        return False
+    try:
+        with httpx.Client(timeout=60) as backend:
+            resp = backend.get(url, headers={"X-API-Key": API_KEY})
+            resp.raise_for_status()
+            content = resp.content
+
+        with httpx.Client(timeout=60) as tg:
+            files = {"document": (filename, content, "application/pdf")}
+            data = {"chat_id": str(chat_id)}
+            if caption:
+                data["caption"] = caption
+            send_url = f"{API_BASE}/sendDocument"
+            tg_resp = tg.post(send_url, data=data, files=files)
+            tg_resp.raise_for_status()
+            return tg_resp.json().get("ok", False)
+    except Exception as exc:
+        logger.error("Failed to send document from %s: %s", url, exc)
         return False
 
 
@@ -140,13 +180,14 @@ def forward_media(
     data_b64: str,
     username: str | None,
     filename: str = "",
+    text: str = "",
 ) -> dict | None:
     """Forward media (audio/image/document) to the backend."""
     url = f"{BACKEND_URL}/api/v1/webhook/telegram"
     headers = {"X-API-Key": API_KEY, "Content-Type": "application/json"}
     payload = {
         "chat_id": str(chat_id),
-        "message": "",
+        "message": text,
         "username": username or None,
         "source_format": mediatype,
     }
@@ -214,6 +255,46 @@ def process_update(update: dict) -> None:
         save_offset(update_id)
         return
 
+    mediatype, mimetype, file_id = _extract_media(message)
+    if mediatype and file_id:
+        logger.info("Received %s from %s (chat %s)", mediatype, username or "unknown", chat_id)
+
+        file_data = download_file(file_id)
+        if not file_data:
+            logger.warning("Failed to download %s from chat %s", mediatype, chat_id)
+            send_message(chat_id, "Desculpe, não consegui baixar o arquivo. Tente novamente.")
+            save_offset(update_id)
+            return
+
+        data_b64 = base64.b64encode(file_data).decode()
+        filename = ""
+        if mediatype == "document" and "document" in message:
+            filename = message["document"].get("file_name", "")
+
+        logger.info("📎 %s: %s (%d bytes)", mediatype, mimetype, len(file_data))
+
+        response = forward_media(chat_id, mediatype, mimetype, data_b64, username, filename, text)
+        if response and isinstance(response, dict):
+            reply_text = response.get("reply", "")
+            if reply_text:
+                if send_message(chat_id, reply_text):
+                    logger.info("Replied to chat %s", chat_id)
+                else:
+                    logger.warning("Failed to reply to chat %s", chat_id)
+            media = response.get("media")
+            if isinstance(media, dict) and media.get("url"):
+                report_filename = media.get("filename", "relatorio.pdf")
+                if send_document_from_url(
+                    chat_id, media["url"], report_filename, caption="Seu relatório 📊"
+                ):
+                    logger.info("Document sent to chat %s: %s", chat_id, report_filename)
+                else:
+                    logger.warning("Failed to send document %s to chat %s", report_filename, chat_id)
+        else:
+            send_message(chat_id, "Desculpe, não consegui processar o arquivo. Tente novamente como texto.")
+        save_offset(update_id)
+        return
+
     # ── Text message ──
     if text:
         logger.info("Received message from %s (chat %s): %s", username or "unknown", chat_id, text[:80])
@@ -221,46 +302,25 @@ def process_update(update: dict) -> None:
         if response and isinstance(response, dict):
             reply_text = response.get("reply", "")
             if reply_text:
-                send_message(chat_id, reply_text)
-                logger.info("Replied to chat %s", chat_id)
+                if send_message(chat_id, reply_text):
+                    logger.info("Replied to chat %s", chat_id)
+                else:
+                    logger.warning("Failed to reply to chat %s", chat_id)
+            media = response.get("media")
+            if isinstance(media, dict) and media.get("url"):
+                filename = media.get("filename", "relatorio.pdf")
+                if send_document_from_url(
+                    chat_id, media["url"], filename, caption="Seu relatório 📊"
+                ):
+                    logger.info("Document sent to chat %s: %s", chat_id, filename)
+                else:
+                    logger.warning("Failed to send document %s to chat %s", filename, chat_id)
         else:
             send_message(chat_id, "Sorry, I couldn't process your message right now.")
         save_offset(update_id)
         return
 
-    # ── Media message ──
-    mediatype, mimetype, file_id = _extract_media(message)
-    if not mediatype or not file_id:
-        # Unknown message type — ignore
-        save_offset(update_id)
-        return
-
-    logger.info("Received %s from %s (chat %s)", mediatype, username or "unknown", chat_id)
-
-    # Download media from Telegram
-    file_data = download_file(file_id)
-    if not file_data:
-        logger.warning("Failed to download %s from chat %s", mediatype, chat_id)
-        send_message(chat_id, "Desculpe, não consegui baixar o arquivo. Tente novamente.")
-        save_offset(update_id)
-        return
-
-    data_b64 = base64.b64encode(file_data).decode()
-    filename = ""
-    if mediatype == "document" and "document" in message:
-        filename = message["document"].get("file_name", "")
-
-    logger.info("📎 %s: %s (%d bytes)", mediatype, mimetype, len(file_data))
-
-    # Forward to backend
-    response = forward_media(chat_id, mediatype, mimetype, data_b64, username, filename)
-    if response and isinstance(response, dict):
-        reply_text = response.get("reply", "")
-        if reply_text:
-            send_message(chat_id, reply_text)
-            logger.info("Replied to chat %s", chat_id)
-    else:
-        send_message(chat_id, "Desculpe, não consegui processar o arquivo. Tente novamente como texto.")
+    # Unknown message type — ignore
 
     save_offset(update_id)
 

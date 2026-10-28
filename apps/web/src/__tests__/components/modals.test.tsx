@@ -9,9 +9,19 @@ const mockCloseModal = vi.fn()
 const mockOpenModal = vi.fn()
 const mockSetFilter = vi.fn()
 
+type StoreState = {
+  activeModal: "new-transaction" | "transaction-detail" | "filter" | null
+  selectedTransaction: typeof sampleTransaction | null
+  closeModal: typeof mockCloseModal
+  openModal: typeof mockOpenModal
+  setFilter: typeof mockSetFilter
+  filter: { type: "all"; categories: string[]; searchQuery: string }
+}
+type StoreSelector<T = unknown> = (state: StoreState) => T
+
 const mockUseAppStore = vi.hoisted(() => ({
-  useAppStore: (selector?: Function) => {
-    const state = {
+  useAppStore: (selector?: StoreSelector) => {
+    const state: StoreState = {
       activeModal: null,
       selectedTransaction: null,
       closeModal: mockCloseModal,
@@ -62,7 +72,8 @@ const sampleTransaction = {
   id: "1",
   name: "Supermercado Pão de Açúcar",
   category: "Alimentação",
-  amount: -287.5,
+  type: "despesa" as const,
+  amount: 287.5,
   date: "30 Abr",
   source: "manual" as const,
   status: "confirmed" as const,

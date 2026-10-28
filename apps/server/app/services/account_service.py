@@ -1,7 +1,5 @@
 """REST service for Account operations."""
 
-from uuid import UUID
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
@@ -11,7 +9,7 @@ from app.schemas.account import AccountCreate, AccountResponse, AccountUpdate
 
 async def list_accounts(
     db: AsyncSession,
-    user_id: UUID,
+    user_id: int,
     *,
     skip: int = 0,
     limit: int = 50,
@@ -23,7 +21,7 @@ async def list_accounts(
 
 async def create_account(
     db: AsyncSession,
-    user_id: UUID,
+    user_id: int,
     data: AccountCreate,
 ) -> AccountResponse:
     """Create a new account."""
@@ -40,7 +38,7 @@ async def create_account(
     return AccountResponse.model_validate(account)
 
 
-async def get_account(db: AsyncSession, account_id: UUID, user_id: UUID) -> AccountResponse:
+async def get_account(db: AsyncSession, account_id: int, user_id: int) -> AccountResponse:
     """Get an account by ID."""
     account = await account_repo.get_by_id(db, account_id)
     if not account or account.user_id != user_id:
@@ -50,8 +48,8 @@ async def get_account(db: AsyncSession, account_id: UUID, user_id: UUID) -> Acco
 
 async def update_account(
     db: AsyncSession,
-    account_id: UUID,
-    user_id: UUID,
+    account_id: int,
+    user_id: int,
     data: AccountUpdate,
 ) -> AccountResponse:
     """Update an account."""
@@ -63,7 +61,7 @@ async def update_account(
     return AccountResponse.model_validate(account)
 
 
-async def delete_account(db: AsyncSession, account_id: UUID, user_id: UUID) -> None:
+async def delete_account(db: AsyncSession, account_id: int, user_id: int) -> None:
     """Delete an account."""
     account = await account_repo.get_by_id(db, account_id)
     if not account or account.user_id != user_id:

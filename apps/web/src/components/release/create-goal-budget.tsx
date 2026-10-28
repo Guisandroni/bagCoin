@@ -1,11 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { DollarSign, CalendarDays, Edit2 } from "lucide-react"
+import { DollarSign, Edit2 } from "lucide-react"
 import { AppBar } from "./app-bar"
 import { PillInput } from "./pill-input"
+import { ReleaseDatePicker } from "./date-picker"
 import { SegmentToggle } from "./segment-toggle"
 import { CategoryIconGrid } from "./category-icon-grid"
+import { sanitizeMoneyInput } from "./format"
 import type { ReleaseBudgetType, ReleaseCategoryType } from "./types"
 
 interface CreateGoalBudgetProps {
@@ -28,8 +30,8 @@ export function CreateGoalBudget({
 }: CreateGoalBudgetProps) {
   const [type, setType] = useState<ReleaseBudgetType>(initialType)
   const [name, setName] = useState("")
-  const [target, setTarget] = useState("0,00")
-  const [initial, setInitial] = useState("0,00")
+  const [target, setTarget] = useState("")
+  const [initial, setInitial] = useState("")
   const [category, setCategory] = useState<ReleaseCategoryType>("viagem")
   const [deadline, setDeadline] = useState("")
 
@@ -46,8 +48,8 @@ export function CreateGoalBudget({
   }
 
   return (
-    <div className="rls min-h-screen bg-[var(--rls-background)]">
-      <AppBar onBack={onBack} />
+    <div className="rls mx-auto min-h-dvh w-full max-w-md bg-[var(--rls-background)] shadow-[0_0_48px_rgba(22,82,240,0.08)]">
+      <AppBar title="Criar Novo Objetivo" onBack={onBack} />
 
       <main className="px-[var(--rls-container-margin)] flex flex-col gap-[var(--rls-stack-gap-md)] pt-[var(--rls-stack-gap-md)] pb-8">
         {/* Segment Toggle */}
@@ -70,8 +72,9 @@ export function CreateGoalBudget({
             label="Valor Alvo"
             icon={<DollarSign className="w-5 h-5" />}
             placeholder="0,00"
+            inputMode="decimal"
             value={target}
-            onChange={(e) => setTarget(e.target.value)}
+            onChange={(e) => setTarget(sanitizeMoneyInput(e.target.value))}
           />
 
           {type === "meta" && (
@@ -79,19 +82,18 @@ export function CreateGoalBudget({
               label="Valor Inicial"
               icon={<DollarSign className="w-5 h-5" />}
               placeholder="0,00"
+              inputMode="decimal"
               value={initial}
-              onChange={(e) => setInitial(e.target.value)}
+              onChange={(e) => setInitial(sanitizeMoneyInput(e.target.value))}
             />
           )}
 
           <CategoryIconGrid value={category} onChange={setCategory} />
 
-          <PillInput
+          <ReleaseDatePicker
             label="Data Limite"
-            icon={<CalendarDays className="w-5 h-5" />}
-            type="date"
             value={deadline}
-            onChange={(e) => setDeadline(e.target.value)}
+            onChange={setDeadline}
           />
 
           <button

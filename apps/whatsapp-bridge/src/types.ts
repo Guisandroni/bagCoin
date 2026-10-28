@@ -47,4 +47,6 @@ export interface Config {
   dedupTtlMs: number;
   maxReplyLength: number;
   webhookTimeout: number;
+  sendSeen: boolean;
+  showTyping: boolean;
 }

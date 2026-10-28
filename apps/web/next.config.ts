@@ -17,6 +17,16 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["lucide-react"],
   },
+
+  async rewrites() {
+    const apiTarget = process.env.API_URL || "http://localhost:8000/api/v1";
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${apiTarget}/:path*`,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

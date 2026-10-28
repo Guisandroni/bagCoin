@@ -12,6 +12,7 @@ export interface Transaction {
   id: string
   name: string
   category: string
+  type: TransactionType
   amount: number
   date: string
   source: TransactionSource

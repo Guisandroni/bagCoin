@@ -17,7 +17,6 @@ from app.core.config import settings
 from app.core.logfire_setup import instrument_app, setup_logfire
 from app.core.logging import setup_logging
 from app.core.middleware import RequestIDMiddleware, SecurityHeadersMiddleware
-from app.core.csrf import CSRFMiddleware
 
 
 class LifespanState(TypedDict, total=False):
@@ -42,6 +41,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[LifespanState, None]:
     redis_client = RedisClient()
     await redis_client.connect()
     state["redis"] = redis_client
+
+    # Bug 8.1 — multimodal readiness check
+    try:
+        from app.agents.multimodal import _configured_api_key
+
+        groq_ok = _configured_api_key(settings.GROQ_API_KEY) is not None
+        gemini_ok = _configured_api_key(settings.GEMINI_API_KEY) is not None
+        if not groq_ok:
+            msg = "GROQ_API_KEY not configured — audio (Whisper) and image (Llama-4-Scout) will be disabled"
+            if settings.ENVIRONMENT == "production":
+                logger.warning(msg)
+            else:
+                logger.info(msg)
+        if not groq_ok and not gemini_ok:
+            logger.warning(
+                "Neither GROQ_API_KEY nor GEMINI_API_KEY configured — all image analysis disabled"
+            )
+    except Exception as exc:
+        logger.warning(f"Could not verify multimodal API keys: {exc}")
 
     # Tables are managed by Alembic migrations (run via entrypoint.sh).
     # create_all is kept as fallback for environments without Alembic.
@@ -80,7 +98,7 @@ SHOW_DOCS_ENVIRONMENTS = ("local", "staging", "development")
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     # Only show docs in allowed environments (hide in production)
-    show_docs = settings.ENVIRONMENT in SHOW_DOCS_ENVIRONMENTS
+    show_docs = settings.ENVIRONMENT in SHOW_DOCS_ENVIRONMENTS or settings.ENABLE_API_DOCS
     openapi_url = f"{settings.API_V1_STR}/openapi.json" if show_docs else None
     docs_url = "/docs" if show_docs else None
     redoc_url = "/redoc" if show_docs else None
@@ -158,8 +176,9 @@ A FastAPI project
     # Security hardening: protect against XSS, clickjacking, MIME sniffing
     app.add_middleware(SecurityHeadersMiddleware)
 
-    # CSRF protection for state-changing endpoints
-    app.add_middleware(CSRFMiddleware)
+    # CSRF protection disabled — JWT in Authorization header provides equivalent
+    # protection for cross-domain architecture (Vercel frontend + VPS backend).
+    # app.add_middleware(CSRFMiddleware)
 
     # Exception handlers
     register_exception_handlers(app)
@@ -194,6 +213,10 @@ A FastAPI project
 
     # Pagination
     add_pagination(app)
+
+    from app.admin import setup_admin
+
+    setup_admin(app)
 
     return app
 

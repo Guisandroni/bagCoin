@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
-from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -16,7 +15,7 @@ class MockUser:
     """Mock authenticated user."""
 
     def __init__(self):
-        self.id = uuid4()
+        self.id = 1
         self.email = "test@example.com"
         self.full_name = "Test User"
         self.is_active = True
@@ -59,11 +58,11 @@ async def client_with_auth(mock_user, mock_redis, mock_db_session):
 def _mock_account_dict(**kwargs) -> dict:
     """Return a mock account response dict."""
     now = kwargs.get("created_at", datetime.now(UTC))
-    account_id = kwargs.get("id", uuid4())
-    user_id = kwargs.get("user_id", uuid4())
+    account_id = kwargs.get("id", 1)
+    user_id = kwargs.get("user_id", 1)
     return {
-        "id": str(account_id) if isinstance(account_id, UUID) else account_id,
-        "user_id": str(user_id) if isinstance(user_id, UUID) else user_id,
+        "id": str(account_id) if False else account_id,
+        "user_id": str(user_id) if False else user_id,
         "name": kwargs.get("name", "Nubank"),
         "bank": kwargs.get("bank", "Nubank"),
         "type": kwargs.get("type", "CHECKING"),
@@ -102,7 +101,7 @@ async def test_create_account_requires_auth(client):
 @pytest.mark.anyio
 async def test_get_account_requires_auth(client):
     """Test that getting an account requires auth."""
-    response = await client.get(f"{settings.API_V1_STR}/bagcoin/accounts/{uuid4()}")
+    response = await client.get(f"{settings.API_V1_STR}/bagcoin/accounts/{1}")
     assert response.status_code == 401
 
 
@@ -110,7 +109,7 @@ async def test_get_account_requires_auth(client):
 async def test_update_account_requires_auth(client):
     """Test that updating an account requires auth."""
     response = await client.patch(
-        f"{settings.API_V1_STR}/bagcoin/accounts/{uuid4()}",
+        f"{settings.API_V1_STR}/bagcoin/accounts/{1}",
         json={"name": "Updated"},
     )
     assert response.status_code == 401
@@ -119,7 +118,7 @@ async def test_update_account_requires_auth(client):
 @pytest.mark.anyio
 async def test_delete_account_requires_auth(client):
     """Test that deleting an account requires auth."""
-    response = await client.delete(f"{settings.API_V1_STR}/bagcoin/accounts/{uuid4()}")
+    response = await client.delete(f"{settings.API_V1_STR}/bagcoin/accounts/{1}")
     assert response.status_code == 401
 
 
@@ -147,8 +146,8 @@ async def test_list_accounts_empty(client_with_auth):
 async def test_list_accounts_with_data(client_with_auth, mock_user):
     """Test listing accounts with data."""
     accounts_data = [
-        _mock_account_dict(id=uuid4(), name="Nubank", bank="Nubank", balance=1500.0, user_id=mock_user.id),
-        _mock_account_dict(id=uuid4(), name="Itaú", bank="Itaú", balance=5000.0, user_id=mock_user.id, color="#003399"),
+        _mock_account_dict(id=1, name="Nubank", bank="Nubank", balance=1500.0, user_id=mock_user.id),
+        _mock_account_dict(id=1, name="Itaú", bank="Itaú", balance=5000.0, user_id=mock_user.id, color="#003399"),
     ]
 
     with patch(
@@ -175,7 +174,7 @@ async def test_list_accounts_with_data(client_with_auth, mock_user):
 @pytest.mark.anyio
 async def test_create_account(client_with_auth, mock_user):
     """Test creating an account returns 201."""
-    fake_id = uuid4()
+    fake_id = 1
     now = datetime.now(UTC)
 
     with patch(
@@ -225,7 +224,7 @@ async def test_create_account_invalid_data(client_with_auth):
 @pytest.mark.anyio
 async def test_get_account(client_with_auth, mock_user):
     """Test getting a specific account."""
-    account_id = uuid4()
+    account_id = 1
     account_data = _mock_account_dict(
         id=account_id,
         name="Nubank",
@@ -260,11 +259,11 @@ async def test_get_account_not_found(client_with_auth):
         new_callable=AsyncMock,
     ) as mock_get:
         mock_get.side_effect = NotFoundError(
-            message="Account not found", details={"id": str(uuid4())}
+            message="Account not found", details={"id": str(1)}
         )
 
         response = await client_with_auth.get(
-            f"{settings.API_V1_STR}/bagcoin/accounts/{uuid4()}"
+            f"{settings.API_V1_STR}/bagcoin/accounts/{1}"
         )
 
     assert response.status_code == 404
@@ -279,7 +278,7 @@ async def test_get_account_not_found(client_with_auth):
 @pytest.mark.anyio
 async def test_update_account(client_with_auth, mock_user):
     """Test updating an account."""
-    account_id = uuid4()
+    account_id = 1
     updated_data = _mock_account_dict(
         id=account_id,
         name="Updated Account",
@@ -327,7 +326,7 @@ async def test_delete_account(client_with_auth):
         mock_delete.return_value = None
 
         response = await client_with_auth.delete(
-            f"{settings.API_V1_STR}/bagcoin/accounts/{uuid4()}"
+            f"{settings.API_V1_STR}/bagcoin/accounts/{1}"
         )
 
     assert response.status_code == 204
@@ -343,11 +342,11 @@ async def test_delete_account_not_found(client_with_auth):
         new_callable=AsyncMock,
     ) as mock_delete:
         mock_delete.side_effect = NotFoundError(
-            message="Account not found", details={"id": str(uuid4())}
+            message="Account not found", details={"id": str(1)}
         )
 
         response = await client_with_auth.delete(
-            f"{settings.API_V1_STR}/bagcoin/accounts/{uuid4()}"
+            f"{settings.API_V1_STR}/bagcoin/accounts/{1}"
         )
 
     assert response.status_code == 404

@@ -20,7 +20,7 @@ import { BRAND, NAV_ITEMS } from "@/lib/constants"
 import { useAuthStore } from "@/lib/auth-store"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { useOpenIntegrationChat } from "@/hooks/use-integrations"
+// import { useOpenIntegrationChat } from "@/hooks/use-integrations"
 import { useWhatsAppConnect } from "@/hooks/use-whatsapp-connect"
 
 import { useAppStore } from "@/lib/store"
@@ -41,7 +41,7 @@ export function TabletSidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuthStore()
   const openDrawer = useAppStore((s) => s.openDrawer)
-  const { openIntegrationChat } = useOpenIntegrationChat()
+  // const { openIntegrationChat } = useOpenIntegrationChat()
   const { isLinked: whatsappLinked, isConnecting: whatsappConnecting, connect: connectWhatsApp } = useWhatsAppConnect()
 
   const initials = user?.full_name
@@ -114,6 +114,7 @@ export function TabletSidebar() {
             <MessageSquare className="h-[18px] w-[18px] shrink-0" />
           )}
         </button>
+        {/*
         <button
           type="button"
           disabled={whatsappConnecting}
@@ -129,6 +130,7 @@ export function TabletSidebar() {
             </svg>
           )}
         </button>
+        */}
 
         <Link href="/app/contas" title="Contas" className={navLinkClass(pathname.startsWith("/app/contas"))}>
           <CreditCard className="h-[18px] w-[18px] shrink-0" />

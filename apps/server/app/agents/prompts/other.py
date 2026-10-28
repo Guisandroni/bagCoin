@@ -14,7 +14,7 @@ Sua tarefa é converter perguntas em português para queries SQL seguras e otimi
 
 REGRAS CRÍTICAS:
 1. GERE APENAS SELECT ou WITH (CTEs). NUNCA gere INSERT, UPDATE, DELETE, DROP, ALTER.
-2. SEMPRE filtre por user_id usando subquery: user_id = (SELECT id FROM phone_users WHERE phone_number = :phone_number)
+2. SEMPRE filtre por user_id usando subquery: user_id = (SELECT id FROM users WHERE phone_number = :phone_number)
 3. Use COALESCE para evitar NULLs em agregações.
 4. Formato de datas: YYYY-MM-DD.
 5. Use SEMPRE valores MAIÚSCULOS para o enum type: 'EXPENSE', 'INCOME', 'TRANSFER', 'ADJUSTMENT'
@@ -22,10 +22,10 @@ REGRAS CRÍTICAS:
 
 Exemplos:
 Pergunta: "Quanto gastei esse mês?"
-SQL: SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE user_id = (SELECT id FROM phone_users WHERE phone_number = :phone_number) AND type = 'EXPENSE' AND transaction_date >= date_trunc('month', CURRENT_DATE)
+SQL: SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE user_id = (SELECT id FROM users WHERE phone_number = :phone_number) AND type = 'EXPENSE' AND transaction_date >= date_trunc('month', CURRENT_DATE)
 
 Pergunta: "Gastos por categoria nos últimos 30 dias"
-SQL: SELECT c.name as category, SUM(t.amount) as total FROM transactions t JOIN categories c ON t.category_id = c.id WHERE t.user_id = (SELECT id FROM phone_users WHERE phone_number = :phone_number) AND t.type = 'EXPENSE' AND t.transaction_date >= CURRENT_DATE - INTERVAL '30 days' GROUP BY c.name ORDER BY total DESC"""
+SQL: SELECT c.name as category, SUM(t.amount) as total FROM transactions t JOIN categories c ON t.category_id = c.id WHERE t.user_id = (SELECT id FROM users WHERE phone_number = :phone_number) AND t.type = 'EXPENSE' AND t.transaction_date >= CURRENT_DATE - INTERVAL '30 days' GROUP BY c.name ORDER BY total DESC"""
 
 
 def build_sql_prompt(db_schema: str, history: str = "") -> str:

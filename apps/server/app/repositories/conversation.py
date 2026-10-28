@@ -37,7 +37,7 @@ async def get_conversation_by_id(
 
 async def get_conversations_by_user(
     db: AsyncSession,
-    user_id: UUID | None = None,
+    user_id: int | None = None,
     *,
     skip: int = 0,
     limit: int = 50,
@@ -140,7 +140,7 @@ async def admin_list_with_users(
     skip: int = 0,
     limit: int = 50,
     search: str | None = None,
-    user_id: UUID | None = None,
+    user_id: int | None = None,
     include_archived: bool = False,
 ) -> tuple[list[tuple[Conversation, int, str | None]], int]:
     """Admin: list conversations across all users with message counts and owner email.
@@ -179,7 +179,7 @@ async def admin_list_with_users(
 
 async def count_conversations(
     db: AsyncSession,
-    user_id: UUID | None = None,
+    user_id: int | None = None,
     *,
     include_archived: bool = False,
 ) -> int:
@@ -196,7 +196,7 @@ async def count_conversations(
 async def create_conversation(
     db: AsyncSession,
     *,
-    user_id: UUID | None = None,
+    user_id: int | None = None,
     title: str | None = None,
 ) -> Conversation:
     """Create a new conversation."""

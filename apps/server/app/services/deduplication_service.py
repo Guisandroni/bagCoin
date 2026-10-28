@@ -36,7 +36,11 @@ def is_duplicate(
         # Must be within time window
         tx_date = tx.transaction_date
         if tx_date and isinstance(tx_date, datetime):
-            if tx_date.replace(tzinfo=None) < cutoff:
+            if tx_date.tzinfo is None:
+                tx_date = tx_date.replace(tzinfo=UTC)
+            else:
+                tx_date = tx_date.astimezone(UTC)
+            if tx_date < cutoff:
                 continue
         elif tx_date:
             # Could be a date object without time — skip time check

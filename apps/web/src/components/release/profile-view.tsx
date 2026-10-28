@@ -1,73 +1,65 @@
-"use client"
+"use client";
 
-import { ArrowLeft, Pencil, Badge, Mail, Phone, Lock, KeyRound } from "lucide-react"
-import { AppBar } from "./app-bar"
-import { PillInput } from "./pill-input"
-import type { ReleaseProfile } from "./types"
+import { useState } from "react";
+import Image from "next/image";
+import { Badge, Eye, EyeOff, LogOut, Mail, Phone } from "lucide-react";
+import { AppBar } from "./app-bar";
+import { PillInput } from "./pill-input";
+import type { ReleaseProfile } from "./types";
 
 interface ProfileViewProps {
-  profile: ReleaseProfile & { phone?: string; tier?: string }
-  onBack?: () => void
-  onChangePassword?: () => void
-  onSave?: (data: {
-    name: string
-    email: string
-    phone: string
-  }) => void
-  isSaving?: boolean
+  profile: ReleaseProfile & { phone?: string; tier?: string };
+  onBack?: () => void;
+  onOpenDrawer?: () => void;
+  onLogout?: () => void;
 }
 
 export function ProfileView({
   profile,
   onBack,
-  onChangePassword,
-  onSave,
-  isSaving,
+  onOpenDrawer,
+  onLogout,
 }: ProfileViewProps) {
+  const [showPhone, setShowPhone] = useState(false);
+  const phoneValue = profile.phone || "";
+  const maskedPhone = maskPhone(phoneValue);
+
   return (
-    <div className="rls min-h-screen bg-[var(--rls-background)]">
-      <AppBar title="Perfil" onBack={onBack} titleClassName="text-[var(--rls-primary-container)] rls-text-headline-sm" />
+    <div className="rls mx-auto min-h-dvh w-full max-w-md bg-[var(--rls-background)] shadow-[0_0_48px_rgba(22,82,240,0.08)]">
+      <AppBar
+        title="Perfil"
+        onBack={onBack}
+        onOpenDrawer={onOpenDrawer}
+        titleClassName="text-[var(--rls-primary-container)] rls-text-headline-sm"
+      />
 
       <main className="px-[var(--rls-container-margin)] flex flex-col gap-[var(--rls-stack-gap-lg)] pt-[var(--rls-stack-gap-md)] pb-24">
-        {/* Profile Card */}
         <div className="bg-[var(--rls-surface-container-lowest)] border border-[var(--rls-outline-variant)] rounded-[var(--rls-radius-lg)] p-[var(--rls-inline-padding-md)] flex flex-col gap-6">
-          {/* Profile Picture */}
           <div className="flex justify-center">
-            <div className="relative">
-              <div className="w-24 h-24 rounded-full overflow-hidden bg-[var(--rls-surface-variant)] flex items-center justify-center">
-                {profile.avatarUrl ? (
-                  <img
-                    src={profile.avatarUrl}
-                    alt={profile.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-[var(--rls-on-surface-variant)] text-3xl">
-                    {profile.name.charAt(0)}
-                  </span>
-                )}
-              </div>
-              <button
-                type="button"
-                className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-[var(--rls-primary-container)] flex items-center justify-center shadow-md hover:bg-[var(--rls-primary)] transition-colors"
-                aria-label="Editar foto"
-              >
-                <Pencil className="w-4 h-4 text-white" />
-              </button>
+            <div className="relative w-24 h-24 rounded-full overflow-hidden bg-[var(--rls-surface-variant)] flex items-center justify-center">
+              {profile.avatarUrl ? (
+                <Image
+                  src={profile.avatarUrl}
+                  alt={profile.name}
+                  fill
+                  sizes="96px"
+                  unoptimized
+                  className="object-cover"
+                />
+              ) : (
+                <span className="text-[var(--rls-on-surface-variant)] text-3xl">
+                  {profile.name.charAt(0)}
+                </span>
+              )}
             </div>
           </div>
 
-          {/* Name & Tier */}
           <div className="text-center">
             <h2 className="rls-text-title-lg text-[var(--rls-on-surface)]">
               {profile.name}
             </h2>
-            <p className="rls-text-body-md text-[var(--rls-on-surface-variant)] mt-1">
-              {profile.tier || "Investidor Pro"}
-            </p>
           </div>
 
-          {/* Section Header */}
           <div className="flex items-center gap-2 border-b border-[var(--rls-outline-variant)] pb-2">
             <Badge className="w-5 h-5 text-[var(--rls-primary)]" />
             <h3 className="rls-text-body-lg text-[var(--rls-on-surface)] font-semibold">
@@ -82,60 +74,69 @@ export function ProfileView({
               label="Nome Completo"
               value={profile.name}
               readOnly
+              tabIndex={-1}
             />
             <PillInput
               icon={<Mail className="w-5 h-5" />}
               label="E-mail"
               value={profile.email}
               readOnly
+              tabIndex={-1}
             />
             {profile.phone && (
-              <PillInput
-                icon={<Phone className="w-5 h-5" />}
-                label="Telefone"
-                value={profile.phone}
-                readOnly
-              />
+              <div className="flex flex-col gap-1">
+                <label className="rls-text-label-lg text-[var(--rls-on-background)] ml-4">
+                  Telefone
+                </label>
+                <div className="relative flex h-14 items-center rounded-[var(--rls-radius-pill)] bg-[var(--rls-surface-container)]">
+                  <Phone className="absolute left-4 h-5 w-5 text-[var(--rls-outline)]" />
+                  <input
+                    value={showPhone ? phoneValue : maskedPhone}
+                    readOnly
+                    tabIndex={-1}
+                    aria-label="Telefone"
+                    className="h-full w-full bg-transparent pl-12 pr-12 rls-text-body-lg text-[var(--rls-on-surface)] outline-none"
+                  />
+                  <button
+                    type="button"
+                    aria-label={
+                      showPhone ? "Esconder telefone" : "Mostrar telefone"
+                    }
+                    aria-pressed={!showPhone}
+                    onClick={() => setShowPhone((value) => !value)}
+                    className="absolute right-4 text-[var(--rls-outline)] transition-colors hover:text-[var(--rls-on-surface)]"
+                  >
+                    {showPhone ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
 
-        {/* Security Card */}
-        <div className="bg-[var(--rls-surface-container-lowest)] border border-[var(--rls-outline-variant)] rounded-[var(--rls-radius-lg)] p-[var(--rls-inline-padding-md)] flex flex-col gap-[var(--rls-stack-gap-md)]">
-          {/* Section Header */}
-          <div className="flex items-center gap-2 border-b border-[var(--rls-outline-variant)] pb-2">
-            <Lock className="w-5 h-5 text-[var(--rls-primary)]" />
-            <h3 className="rls-text-body-lg text-[var(--rls-on-surface)] font-semibold">
-              Segurança
-            </h3>
-          </div>
-
-          <PillInput
-            icon={<KeyRound className="w-5 h-5" />}
-            label="Senha Atual"
-            value="••••••••"
-            readOnly
-            className="opacity-70"
-          />
-
-          <button
-            onClick={onChangePassword}
-            className="w-full h-14 border-2 border-[var(--rls-primary-container)] text-[var(--rls-primary-container)] rls-text-body-lg rounded-[var(--rls-radius-pill)] hover:bg-[var(--rls-primary-container)]/5 transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
-          >
-            <Lock className="w-5 h-5" />
-            Alterar Senha
-          </button>
-        </div>
-
-        {/* Save Button */}
         <button
-          onClick={() => onSave?.({ name: profile.name, email: profile.email, phone: profile.phone || "" })}
-          disabled={isSaving}
-          className="w-full h-14 bg-[var(--rls-primary-container)] text-white rls-text-title-lg rounded-[var(--rls-radius-pill)] hover:bg-[var(--rls-primary)] transition-colors active:scale-[0.98] shadow-md shadow-[var(--rls-primary-container)]/20 flex items-center justify-center gap-2 disabled:opacity-50"
+          type="button"
+          onClick={onLogout}
+          className="flex h-14 w-full items-center justify-center gap-2 rounded-[var(--rls-radius)] bg-[var(--rls-error-container)] text-[var(--rls-on-error-container)] rls-text-body-lg font-semibold transition-opacity hover:opacity-90 active:scale-[0.98]"
         >
-          {isSaving ? "Salvando..." : "Salvar Alterações"}
+          <LogOut className="h-5 w-5" />
+          Sair da Conta
         </button>
       </main>
     </div>
-  )
+  );
+}
+
+function maskPhone(value: string): string {
+  let seenDigits = 0;
+  const totalDigits = value.replace(/\D/g, "").length;
+
+  return value.replace(/\d/g, (digit) => {
+    seenDigits += 1;
+    return seenDigits <= Math.max(0, totalDigits - 4) ? "•" : digit;
+  });
 }

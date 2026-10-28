@@ -28,7 +28,7 @@ async def admin_list_conversations(
     skip: int = Query(0, ge=0, description="Items to skip"),
     limit: int = Query(50, ge=1, le=100, description="Max items to return"),
     search: str | None = Query(default=None, description="Search by title"),
-    user_id: UUID | None = Query(default=None, description="Filter by user ID"),
+    user_id: int | None = Query(default=None, description="Filter by user ID"),
     include_archived: bool = Query(False, description="Include archived conversations"),
 ) -> Any:
     """List all conversations across all users (admin only)."""

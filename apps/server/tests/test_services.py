@@ -20,6 +20,7 @@ class MockUser:
         full_name="Test User",
         hashed_password="$2b$12$hashedpassword",
         is_active=True,
+        email_verified=True,
         role="user",
     ):
         self.id = id or uuid4()
@@ -27,6 +28,8 @@ class MockUser:
         self.full_name = full_name
         self.hashed_password = hashed_password
         self.is_active = is_active
+        self.email_verified = email_verified
+        self.email_verified_at = None if not email_verified else object()
         self.role = role
 
 

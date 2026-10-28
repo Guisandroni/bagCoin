@@ -59,6 +59,35 @@ def build_message_history(
     return messages
 
 
+def build_attachment_context(files: list[Any]) -> str:
+    """Build compact prompt context from uploaded chat files."""
+    if not files:
+        return ""
+
+    blocks: list[str] = []
+    remaining_chars = 18_000
+    for file in files:
+        filename = getattr(file, "filename", "arquivo")
+        mime_type = getattr(file, "mime_type", "desconhecido")
+        parsed_content = (getattr(file, "parsed_content", None) or "").strip()
+        if not parsed_content:
+            blocks.append(
+                f"Arquivo: {filename}\nMIME: {mime_type}\nConteúdo extraído: indisponível."
+            )
+            continue
+
+        content = parsed_content[:remaining_chars]
+        remaining_chars -= len(content)
+        blocks.append(
+            f"Arquivo: {filename}\nMIME: {mime_type}\nConteúdo extraído:\n{content}"
+        )
+        if remaining_chars <= 0:
+            blocks.append("Conteúdo adicional omitido por limite de tamanho.")
+            break
+
+    return "\n\n".join(blocks)
+
+
 @router.websocket("/ws/agent")
 async def agent_websocket(
     websocket: WebSocket,
@@ -109,6 +138,7 @@ async def agent_websocket(
             data = await websocket.receive_json()
             user_message = data.get("message", "")
             file_ids = data.get("file_ids", [])
+            attachment_context = ""
 
             if not user_message and not file_ids:
                 await manager.send_event(websocket, "error", {"message": "Empty message"})
@@ -157,6 +187,8 @@ async def agent_websocket(
                     if file_ids:
                         try:
                             await conv_service.link_files_to_message(user_msg.id, file_ids)
+                            attached_files = await conv_service.list_attached_files(file_ids)
+                            attachment_context = build_attachment_context(attached_files)
                         except Exception as e:
                             logger.warning(f"Failed to link files: {e}")
             except Exception as e:
@@ -168,6 +200,14 @@ async def agent_websocket(
             try:
                 selected_model = data.get("model")
                 assistant = get_agent(model_name=selected_model)
+                effective_user_message = user_message
+                if attachment_context:
+                    effective_user_message = (
+                        f"{user_message}\n\n"
+                        "Arquivos enviados pelo usuário:\n"
+                        f"{attachment_context}\n\n"
+                        "Use os dados acima para responder. Não invente valores que não estejam no conteúdo."
+                    ).strip()
 
                 final_output = ""
                 tool_events: list[Any] = []
@@ -177,7 +217,7 @@ async def agent_websocket(
 
                 # Use LangGraph's astream with messages and updates modes
                 async for stream_mode, data in assistant.stream(
-                    user_message,
+                    effective_user_message,
                     history=conversation_history,
                     context=context,
                 ):

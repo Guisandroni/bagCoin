@@ -6,9 +6,9 @@ import type { ReactNode } from "react"
 
 const mockTxList = vi.hoisted(() => ({
   items: [
-    { id: "1", name: "Supermercado", category: "Alimentação", amount: -287.5, date: "30 Abr", source: "manual", status: "confirmed" },
-    { id: "2", name: "Salário", category: "Salário", amount: 8500, date: "28 Abr", source: "auto", status: "confirmed" },
-    { id: "3", name: "Uber", category: "Transporte", amount: -35, date: "29 Abr", source: "manual", status: "pending" },
+    { id: "1", type: "EXPENSE", name: "Supermercado", category: "Alimentação", amount: 287.5, date: "30 Abr", source: "manual", status: "confirmed" },
+    { id: "2", type: "INCOME", name: "Salário", category: "Salário", amount: 8500, date: "28 Abr", source: "auto", status: "confirmed" },
+    { id: "3", type: "EXPENSE", name: "Uber", category: "Transporte", amount: 35, date: "29 Abr", source: "manual", status: "pending" },
   ],
   total: 3,
 }))
@@ -31,14 +31,14 @@ vi.mock("@/lib/api-client", () => ({
       if (url.includes("summary")) return Promise.resolve(mockSummaryData)
       return Promise.resolve(mockTxList)
     }),
-    post: vi.fn().mockImplementation((_url: string, body: any) => {
+    post: vi.fn().mockImplementation((_url: string, body: Record<string, unknown>) => {
       const merged = { ...mockTxList.items[0], ...body, id: "99" }
-      if (body?.description) merged.name = body.description
+      if (body?.description) merged.name = String(body.description)
       return Promise.resolve(merged)
     }),
-    patch: vi.fn().mockImplementation((_url: string, body: any) => {
+    patch: vi.fn().mockImplementation((_url: string, body: Record<string, unknown>) => {
       const merged = { ...mockTxList.items[0], ...body }
-      if (body?.description) merged.name = body.description
+      if (body?.description) merged.name = String(body.description)
       return Promise.resolve(merged)
     }),
     delete: vi.fn().mockResolvedValue(undefined),

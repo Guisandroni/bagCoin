@@ -4,6 +4,7 @@ import { LoginForm } from "@/components/auth/login-form"
 import { RegisterForm } from "@/components/auth/register-form"
 
 const mockLogin = vi.fn()
+const mockRegister = vi.fn()
 const mockLoginWithGoogle = vi.fn()
 const mockClearError = vi.fn()
 let mockError: string | null = null
@@ -11,7 +12,10 @@ let mockError: string | null = null
 vi.mock("@/lib/auth-store", () => ({
   useAuthStore: () => ({
     login: mockLogin,
+    register: mockRegister,
     loginWithGoogle: mockLoginWithGoogle,
+    verifyEmail: vi.fn(),
+    resendVerification: vi.fn(),
     isLoading: false,
     error: mockError,
     clearError: mockClearError,

@@ -36,7 +36,7 @@ class MockUser:
     """Mock authenticated user matching the User ORM model."""
 
     def __init__(self):
-        self.id = uuid4()
+        self.id = 1
         self.email = "test@example.com"
         self.full_name = "Test User"
         self.is_active = True
@@ -88,7 +88,7 @@ def _mock_transaction(**kwargs) -> MagicMock:
     tx.transaction_date = kwargs.get("transaction_date", datetime.now(UTC))
     tx.raw_input = kwargs.get("raw_input", "gastou 99,90 no mercado")
     tx.confidence_score = kwargs.get("confidence_score", 0.5)
-    tx.user_uuid = kwargs.get("user_uuid", uuid4())
+    tx.user_id = kwargs.get("user_id", 1)
     tx.created_at = kwargs.get("created_at", datetime.now(UTC))
     tx.updated_at = kwargs.get("updated_at", datetime.now(UTC))
     return tx
@@ -168,7 +168,7 @@ async def test_sync_pending_appears_in_pending_list(
         raw_input="gastou 99,90 no mercado",
         transaction_date=now,
         created_at=now,
-        user_uuid=mock_user.id,
+        user_id=mock_user.id,
     )
 
     pending_result = MagicMock()
@@ -202,7 +202,7 @@ async def test_sync_confirm_pending_transaction(
     tx = _mock_transaction(
         id=1,
         confidence_score=0.45,
-        user_uuid=mock_user.id,
+        user_id=mock_user.id,
     )
 
     tx_result = MagicMock()
@@ -247,7 +247,7 @@ async def test_sync_confirmed_appears_in_summary(
         source_format="text",
         transaction_date=now,
         created_at=now,
-        user_uuid=mock_user.id,
+        user_id=mock_user.id,
     )
 
     # get_summary() executes a simple select(Transaction).where(...)
@@ -349,7 +349,7 @@ async def test_sync_full_flow_webhook_to_summary(
         raw_input="gastou 199,90 no supermercado",
         transaction_date=now,
         created_at=now,
-        user_uuid=mock_user.id,
+        user_id=mock_user.id,
     )
 
     pending_result = MagicMock()
@@ -398,4 +398,4 @@ async def test_sync_full_flow_webhook_to_summary(
     rt = summary_data["recent_transactions"][0]
     assert rt["name"] == "Supermercado"
     assert rt["status"] == "confirmed"
-    assert rt["amount"] < 0  # expense is negative in frontend format
+    assert rt["amount"] == 199.90

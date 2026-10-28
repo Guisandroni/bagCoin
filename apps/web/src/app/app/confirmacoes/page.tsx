@@ -190,6 +190,7 @@ export default function ConfirmacoesPage() {
   // Auto-select first conversation on load
   useEffect(() => {
     if (!isListLoading && conversations.length > 0 && !selectedId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedId(conversations[0].id)
     }
   }, [isListLoading, conversations, selectedId])
@@ -197,6 +198,7 @@ export default function ConfirmacoesPage() {
   // When a new conversation is created, select it
   useEffect(() => {
     if (createConversation.data?.id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedId(createConversation.data.id)
     }
   }, [createConversation.data])

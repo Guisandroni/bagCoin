@@ -324,13 +324,13 @@ class LangGraphAssistant:
             yield stream_mode, data
 
 
-def get_agent() -> LangGraphAssistant:
+def get_agent(model_name: str | None = None) -> LangGraphAssistant:
     """Factory function to create a LangGraphAssistant.
 
     Returns:
         Configured LangGraphAssistant instance.
     """
-    return LangGraphAssistant()
+    return LangGraphAssistant(model_name=model_name)
 
 
 async def run_agent(

@@ -13,10 +13,10 @@ vi.mock("@/lib/api-client", () => ({
   default: {},
   api: {
     get: vi.fn().mockResolvedValue(mockAccounts),
-    post: vi.fn().mockImplementation((_url: string, body: any) =>
+    post: vi.fn().mockImplementation((_url: string, body: Record<string, unknown>) =>
       Promise.resolve({ ...mockAccounts[0], ...body, id: 99 })
     ),
-    patch: vi.fn().mockImplementation((_url: string, body: any) =>
+    patch: vi.fn().mockImplementation((_url: string, body: Record<string, unknown>) =>
       Promise.resolve({ ...mockAccounts[0], ...body })
     ),
     delete: vi.fn().mockResolvedValue(undefined),

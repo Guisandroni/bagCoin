@@ -52,6 +52,20 @@ test:
 test-cov:
 	uv run --directory apps/server pytest tests/ -v --cov=app --cov-report=html --cov-report=term-missing
 
+# === Agent/Chatbot Tests (Fase 0-8 do plano) ===
+test-agents:
+	uv run --directory apps/server pytest tests/agents/ -v --tb=short
+
+test-agent-integration:
+	uv run --directory apps/server pytest tests/integration/ -v --tb=short -m integration
+
+test-chatbot: test-agents test-agent-integration
+
+test-chatbot-docker:
+	docker compose up -d db redis app
+	docker compose exec -T app uv run alembic upgrade head
+	docker compose exec -T app uv run pytest tests/agents/ tests/integration/ -v --tb=short
+
 # === Frontend Tests ===
 test-frontend:
 	cd apps/web && npm run test
@@ -155,7 +169,7 @@ docker-shell:
 
 # === Docker: Production (with Traefik) ===
 docker-prod:
-	docker-compose -f docker-compose.prod.yml up -d
+	docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 	@echo ""
 	@echo "✅ Production services started with Traefik!"
 	@echo ""
@@ -165,13 +179,13 @@ docker-prod:
 	@echo "   Traefik: https://traefik.$$DOMAIN"
 
 docker-prod-down:
-	docker-compose -f docker-compose.prod.yml down
+	docker compose --env-file .env.prod -f docker-compose.prod.yml down
 
 docker-prod-logs:
-	docker-compose -f docker-compose.prod.yml logs -f
+	docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f
 
 docker-prod-build:
-	docker-compose -f docker-compose.prod.yml build
+	docker compose --env-file .env.prod -f docker-compose.prod.yml build
 
 # === Docker: Individual Services ===
 docker-db:

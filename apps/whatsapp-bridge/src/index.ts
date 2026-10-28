@@ -31,16 +31,18 @@ app.use(express.json({ limit: '50mb' }));
 const client = new Client({
   authStrategy: new LocalAuth({ dataPath: './whatsapp-session' }),
   puppeteer: {
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
     headless: true,
+    protocolTimeout: 120_000,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-features=IsolateOrigins,site-per-process',
       '--disable-gpu',
+      '--disable-extensions',
       '--no-first-run',
       '--no-zygote',
-      '--single-process',
       '--disable-background-networking',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
@@ -78,6 +80,14 @@ client.on('ready', () => {
   console.log(`📱 Bridge rodando na porta ${config.port}`);
 });
 
+client.on('auth_failure', (message) => {
+  console.error('❌ Falha de autenticação do WhatsApp:', message);
+});
+
+client.on('disconnected', (reason) => {
+  console.error('❌ WhatsApp desconectado:', reason);
+});
+
 // Usa 'message' em vez de 'message_create' para evitar duplicatas
 client.on('message', async (msg) => {
   // Ignora mensagens do próprio bot e de grupos
@@ -91,6 +101,15 @@ client.on('message', async (msg) => {
   }
 
   console.log(`\n📩 Mensagem de ${msg.from}: ${msg.body || '(mídia)'}`);
+
+  // ── Presença ──
+  const chat = await msg.getChat();
+  if (config.sendSeen) {
+    await chat.sendSeen();
+  }
+  if (config.showTyping) {
+    await chat.sendStateTyping();
+  }
 
   // Constrói payload para a API
   const payload: WebhookPayload = {
@@ -130,6 +149,11 @@ client.on('message', async (msg) => {
   // Envia para a API FastAPI
   const data = await sendToFastApi(payload);
 
+  // Limpa estado de digitando
+  if (config.showTyping) {
+    await chat.clearState();
+  }
+
   // Resposta de texto
   if (hasReply(data)) {
     await sendReply(msg.from, data.reply);
@@ -151,11 +175,31 @@ client.on('message', async (msg) => {
 
 // ── Função auxiliar para envio de reply ────
 
+function isRetryableSendError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return /Runtime\.callFunctionOn timed out|protocolTimeout|Target closed|Execution context was destroyed/i.test(err.message);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function sendReply(to: string, text: string): Promise<void> {
   try {
     const chunks = splitMessage(text);
     for (const chunk of chunks) {
-      await client.sendMessage(to, chunk);
+      try {
+        await client.sendMessage(to, chunk);
+      } catch (err: unknown) {
+        if (!isRetryableSendError(err)) {
+          throw err;
+        }
+        if (err instanceof Error) {
+          console.warn(`⚠️ Timeout ao enviar resposta para ${to}. Tentando novamente: ${err.message}`);
+        }
+        await delay(1500);
+        await client.sendMessage(to, chunk);
+      }
     }
     console.log(`📤 Resposta enviada para ${to}`);
   } catch (err: unknown) {

@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = False
     ENVIRONMENT: Literal["development", "local", "staging", "production"] = "local"
+    ENABLE_API_DOCS: bool = False
     TIMEZONE: str = "UTC"  # IANA timezone (e.g. "UTC", "Europe/Warsaw", "America/New_York")
     MODELS_CACHE_DIR: Path = Path("./models_cache")
     MEDIA_DIR: Path = Path("./media")
@@ -153,6 +154,13 @@ class Settings(BaseSettings):
     ]
     AI_FRAMEWORK: str = "langgraph"
     LLM_PROVIDER: str = "openai"
+    HUMANIZE_RESPONSES: bool = False
+    HUMANIZE_MAX_CHARS: int = 500
+    HUMANIZE_ALLOWED_INTENTS_EXTRA: list[str] = []
+    LLM_EXTRACT_TIMEOUT: float = 4.0
+    IMAGE_STRUCTURED_EXTRACT: bool = True
+    ECHO_AUDIO_TRANSCRIPTION: bool = False
+    EXTRA_WHISPER_HALLUCINATIONS: list[str] = []
 
     # === BagCoin / LLM APIs ===
     GROQ_API_KEY: str = ""
@@ -167,9 +175,37 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
 
+    # === SMTP / Email Verification ===
+    EMAIL_PROVIDER: str = "smtp"  # smtp | resend_api
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_USE_TLS: bool = True
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = ""
+    RESEND_API_BASE_URL: str = "https://api.resend.com"
+    EMAIL_VERIFICATION_TTL_SECONDS: int = 600
+    EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: int = 60
+    EMAIL_VERIFICATION_MAX_ATTEMPTS: int = 5
+    EMAIL_VERIFICATION_SEND_LIMIT_PER_HOUR: int = 5
+    EMAIL_VERIFICATION_SEND_LIMIT_PER_IP_PER_HOUR: int = 20
+    EMAIL_VERIFICATION_VERIFY_LIMIT_PER_10_MIN: int = 10
+    FRONTEND_BASE_URL: str = "http://localhost:3000"
+    PASSWORD_RESET_TTL_SECONDS: int = 300
+    PASSWORD_RESET_REQUEST_COOLDOWN_SECONDS: int = 180
+    PASSWORD_RESET_SEND_LIMIT_PER_HOUR: int = 5
+    SUPPORT_EMAIL: str = ""
+
     # === WhatsApp Bridge ===
     WHATSAPP_BRIDGE_URL: str = "http://whatsapp-bridge:3001"
     WHATSAPP_API_KEY: str = "bagcoin_webhook_secret_123"
+
+    # === Internal base URL used by bridges to fetch reports ===
+    # Points to the backend service as seen from the bridges' network.
+    # In Docker Compose this is typically http://app:8000.
+    INTERNAL_API_BASE_URL: str = "http://app:8000"
 
     # === Bot deep links (web ↔ WhatsApp/Telegram pairing) ===
     BOT_WHATSAPP_NUMBER: str = ""  # E.164 digits only, e.g. 5511999999999

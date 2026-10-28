@@ -71,7 +71,9 @@ def _get_model_override() -> str | None:
 
 
 def _create_deepseek_llm(
-    temperature: float = 0.2, model: str | None = None
+    temperature: float = 0.2,
+    model: str | None = None,
+    request_timeout: float | None = None,
 ) -> BaseChatModel | None:
     """Create a DeepSeek LLM instance (primary provider)."""
     if not settings.DEEPSEEK_API_KEY:
@@ -84,7 +86,7 @@ def _create_deepseek_llm(
             model=model_name,
             temperature=temperature,
             max_tokens=2048,
-            timeout=30,
+            timeout=request_timeout or 30,
             max_retries=1,
         )
     except Exception as e:
@@ -93,7 +95,9 @@ def _create_deepseek_llm(
 
 
 def _create_opencode_llm(
-    temperature: float = 0.2, model: str | None = None
+    temperature: float = 0.2,
+    model: str | None = None,
+    request_timeout: float | None = None,
 ) -> BaseChatModel | None:
     """Create an OpenCodeGo LLM instance."""
     if not settings.OPENCODE_API_KEY:
@@ -109,7 +113,7 @@ def _create_opencode_llm(
             model=model_name,
             temperature=temperature,
             max_tokens=2048,
-            timeout=30,
+            timeout=request_timeout or 30,
             max_retries=1,
             model_kwargs=extra,
         )
@@ -118,7 +122,11 @@ def _create_opencode_llm(
         return None
 
 
-def _create_groq_llm(temperature: float = 0.2, model: str | None = None) -> BaseChatModel | None:
+def _create_groq_llm(
+    temperature: float = 0.2,
+    model: str | None = None,
+    request_timeout: float | None = None,
+) -> BaseChatModel | None:
     """Create a Groq LLM instance (final fallback)."""
     if not settings.GROQ_API_KEY:
         return None
@@ -129,7 +137,7 @@ def _create_groq_llm(temperature: float = 0.2, model: str | None = None) -> Base
             model_name=model_name,
             temperature=temperature,
             max_tokens=2048,
-            timeout=15,
+            timeout=request_timeout or 15,
             max_retries=1,
         )
     except Exception as e:
@@ -145,69 +153,84 @@ def _invalidate_cache() -> None:
     logger.info("LLM cache invalidated.")
 
 
-def _select_llm(temperature: float = 0.2, model: str | None = None) -> BaseChatModel | None:
+def _select_llm(
+    temperature: float = 0.2,
+    model: str | None = None,
+    request_timeout: float | None = None,
+) -> BaseChatModel | None:
     """Select the best available LLM.
 
     Priority: DeepSeek -> OpenCodeGo (model list) -> Groq (fallback).
     Cache is invalidated when BAGCOIN_MODEL changes.
     """
     global _cached_llm, _cache_error
+    use_cache = request_timeout is None
 
     override = _get_model_override()
     if override:
-        deepseek = _create_deepseek_llm(temperature, override)
+        deepseek = _create_deepseek_llm(temperature, override, request_timeout)
         if deepseek:
             logger.info(f"LLM selected: DeepSeek/{override} (override)")
-            _cached_llm = deepseek
-            _cache_error = False
+            if use_cache:
+                _cached_llm = deepseek
+                _cache_error = False
             return deepseek
-        opencode = _create_opencode_llm(temperature, override)
+        opencode = _create_opencode_llm(temperature, override, request_timeout)
         if opencode:
             logger.info(f"LLM selected: OpenCodeGo/{override} (override)")
-            _cached_llm = opencode
-            _cache_error = False
+            if use_cache:
+                _cached_llm = opencode
+                _cache_error = False
             return opencode
 
-    if _cached_llm and not _cache_error:
+    if use_cache and _cached_llm and not _cache_error:
         return _cached_llm
 
-    if _cache_error:
+    if use_cache and _cache_error:
         _cached_llm = None
 
     # 1. DeepSeek (primary)
-    deepseek = _create_deepseek_llm(temperature, model)
+    deepseek = _create_deepseek_llm(temperature, model, request_timeout)
     if deepseek:
         logger.info(f"LLM selected: DeepSeek ({model or settings.DEFAULT_LLM_MODEL})")
-        _cached_llm = deepseek
-        _cache_error = False
+        if use_cache:
+            _cached_llm = deepseek
+            _cache_error = False
         return deepseek
 
     # 2. OpenCodeGo — try models in priority order
     models_to_try = [model] if model else OPENCODE_MODELS
     for model_name in models_to_try:
-        opencode = _create_opencode_llm(temperature, model_name)
+        opencode = _create_opencode_llm(temperature, model_name, request_timeout)
         if opencode:
             logger.info(f"LLM selected: OpenCodeGo ({model_name})")
-            _cached_llm = opencode
-            _cache_error = False
+            if use_cache:
+                _cached_llm = opencode
+                _cache_error = False
             return opencode
 
     # 3. Groq (fallback)
-    groq = _create_groq_llm(temperature, model)
+    groq = _create_groq_llm(temperature, model, request_timeout)
     if groq:
         logger.info(f"LLM fallback: Groq ({model or settings.DEFAULT_LLM_MODEL})")
-        _cached_llm = groq
-        _cache_error = False
+        if use_cache:
+            _cached_llm = groq
+            _cache_error = False
         return groq
 
     logger.warning("No LLM available. Running in offline mode (fast-path only).")
-    _cached_llm = None
+    if use_cache:
+        _cached_llm = None
     return None
 
 
-def get_llm(temperature: float = 0.2, model: str | None = None) -> BaseChatModel | None:
+def get_llm(
+    temperature: float = 0.2,
+    model: str | None = None,
+    request_timeout: float | None = None,
+) -> BaseChatModel | None:
     """Return a configured LLM instance (cached globally, no health check)."""
-    return _select_llm(temperature, model)
+    return _select_llm(temperature, model, request_timeout)
 
 
 def timed_invoke(llm: BaseChatModel, messages: list, operation: str = "llm_invoke") -> tuple:

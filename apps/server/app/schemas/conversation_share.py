@@ -12,7 +12,7 @@ from app.schemas.base import BaseSchema
 class ConversationShareCreate(BaseSchema):
     """Schema for creating a conversation share."""
 
-    shared_with: UUID | None = Field(
+    shared_with: int | None = Field(
         default=None, description="User ID to share with (omit for link sharing)"
     )
     permission: Literal["view", "edit"] = Field(default="view", description="Access level")
@@ -24,8 +24,8 @@ class ConversationShareRead(BaseSchema):
 
     id: UUID
     conversation_id: UUID
-    shared_by: UUID
-    shared_with: UUID | None = None
+    shared_by: int
+    shared_with: int | None = None
     share_token: str | None = None
     permission: Literal["view", "edit"] = "view"
     shared_with_email: str | None = Field(default=None, description="Email of the user shared with")
@@ -47,7 +47,7 @@ class AdminConversationRead(BaseSchema):
     """Admin view of a conversation — includes owner email."""
 
     id: UUID
-    user_id: UUID | None = None
+    user_id: int | None = None
     title: str | None = None
     is_archived: bool = False
     message_count: int = 0
@@ -66,8 +66,8 @@ class AdminConversationList(BaseSchema):
 class AdminUserRead(BaseSchema):
     """Minimal user info for admin endpoints."""
 
-    id: UUID
-    email: str
+    id: int
+    email: str | None = None
     full_name: str | None = None
     is_active: bool = True
     conversation_count: int = 0

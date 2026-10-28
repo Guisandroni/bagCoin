@@ -21,7 +21,8 @@ const mockSummaryData = {
       id: "1",
       name: "Supermercado Pão de Açúcar",
       category: "Alimentação",
-      amount: -287.5,
+      type: "EXPENSE" as const,
+      amount: 287.5,
       date: "30 Abr",
       source: "manual",
       status: "confirmed",
@@ -30,6 +31,7 @@ const mockSummaryData = {
       id: "2",
       name: "Salário — Empresa X",
       category: "Salário",
+      type: "INCOME" as const,
       amount: 8500,
       date: "28 Abr",
       source: "auto",
@@ -39,7 +41,8 @@ const mockSummaryData = {
       id: "3",
       name: "Uber",
       category: "Transporte",
-      amount: -35,
+      type: "EXPENSE" as const,
+      amount: 35,
       date: "29 Abr",
       source: "manual",
       status: "pending",
@@ -63,18 +66,26 @@ const apiSummary: TransactionSummary = {
     transaction_date: t.date,
     source: t.source,
     status: t.status,
-    type: t.amount > 0 ? ("INCOME" as const) : ("EXPENSE" as const),
+    type: t.type,
   })),
 }
 
 const mockUseTransactionSummary = vi.hoisted(() => vi.fn())
+
+type StoreState = {
+  openModal: () => void
+  closeModal: () => void
+  activeModal: null
+  selectedTransaction: null
+}
+type StoreSelector<T = unknown> = (state: StoreState) => T
 
 vi.mock("@/hooks/use-transactions", () => ({
   useTransactionSummary: () => mockUseTransactionSummary(),
 }))
 
 vi.mock("@/lib/store", () => ({
-  useAppStore: (selector?: Function) => {
+  useAppStore: (selector?: StoreSelector) => {
     const state = {
       openModal: vi.fn(),
       closeModal: vi.fn(),

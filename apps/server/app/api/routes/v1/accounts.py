@@ -1,8 +1,6 @@
 """Account REST endpoints for web frontend."""
 
 from typing import Any
-from uuid import UUID
-
 from fastapi import APIRouter, status
 
 from app.api.deps import CurrentUser, DBSession
@@ -33,7 +31,7 @@ async def create_account(
 
 @router.get("/{account_id}", response_model=AccountResponse)
 async def get_account(
-    account_id: UUID,
+    account_id: int,
     current_user: CurrentUser,
     db: DBSession,
 ) -> Any:
@@ -43,7 +41,7 @@ async def get_account(
 
 @router.patch("/{account_id}", response_model=AccountResponse)
 async def update_account(
-    account_id: UUID,
+    account_id: int,
     current_user: CurrentUser,
     db: DBSession,
     body: AccountUpdate,
@@ -54,7 +52,7 @@ async def update_account(
 
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_account(
-    account_id: UUID,
+    account_id: int,
     current_user: CurrentUser,
     db: DBSession,
 ) -> None:
