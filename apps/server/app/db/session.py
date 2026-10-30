@@ -97,7 +97,7 @@ async def get_db_context() -> AsyncGenerator[AsyncSession, None]:
 
 @asynccontextmanager
 async def get_worker_db_context() -> AsyncGenerator[AsyncSession, None]:
-    """Get a short-lived async session for background workers (Celery/ARQ).
+    """Get a short-lived async session for background operations.
 
     Creates a fresh engine with NullPool on every call so there are no
     cross-fork / cross-event-loop connection issues.  The engine is disposed

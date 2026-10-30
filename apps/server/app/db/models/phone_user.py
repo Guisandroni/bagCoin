@@ -18,7 +18,7 @@ class PhoneUser(Base, TimestampMixin):
     """BagCoin user identified by phone number.
 
     This is separate from the auth User model — it represents a
-    financial profile user reachable via WhatsApp/Telegram.
+    financial profile user reachable via WhatsApp.
 
     Attributes:
         id: Auto-increment primary key (SERIAL).
@@ -27,8 +27,7 @@ class PhoneUser(Base, TimestampMixin):
         status: Account status (active/inactive/blocked).
         preferences: JSON blob for user preferences.
         financial_profile: JSON blob for financial profile data.
-        telegram_chat_id: Optional Telegram chat ID for Telegram-based users.
-        platform: Communication platform (whatsapp, telegram, etc.).
+        platform: Communication platform (whatsapp).
     """
 
     __tablename__ = "phone_users"
@@ -41,9 +40,6 @@ class PhoneUser(Base, TimestampMixin):
     )
     preferences: Mapped[dict | None] = mapped_column(JSON, default=dict, nullable=True)
     financial_profile: Mapped[dict | None] = mapped_column(JSON, default=dict, nullable=True)
-    telegram_chat_id: Mapped[str | None] = mapped_column(
-        String(50), unique=True, nullable=True, index=True
-    )
     platform: Mapped[str] = mapped_column(String(20), default="whatsapp", nullable=False)
     merged_into_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

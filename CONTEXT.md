@@ -1,6 +1,6 @@
 # bagCoin — domínio financeiro pessoal
 
-Assistente financeiro pessoal com IA integrada via WhatsApp e Telegram. Gerencia transações, orçamentos, metas e relatórios.
+Assistente financeiro pessoal com IA integrada via WhatsApp. Gerencia transações, orçamentos, metas e relatórios.
 
 ## Language
 
@@ -37,11 +37,11 @@ _Avoid_: credit card, crédito
 ### Identidade
 
 **Usuário**:
-A identidade unificada que representa uma pessoa real no sistema. Um mesmo Usuário pode acessar via web (email/senha) e via bot (WhatsApp/Telegram). É a entidade raiz de ownership de todos os dados financeiros.
+A identidade unificada que representa uma pessoa real no sistema. Um mesmo Usuário pode acessar via web (email/senha) e via bot (WhatsApp). É a entidade raiz de ownership de todos os dados financeiros.
 _Avoid_: User, conta, perfil, cliente
 
 **Canal**:
-A superfície pela qual o usuário interage com o sistema: `web` (frontend Next.js), `whatsapp` ou `telegram`.
+A superfície pela qual o usuário interage com o sistema: `web` (frontend Next.js), ou `whatsapp`.
 _Avoid_: plataforma, interface, origem
 
 ### Conversação

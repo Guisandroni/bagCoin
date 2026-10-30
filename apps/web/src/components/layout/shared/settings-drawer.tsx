@@ -24,7 +24,7 @@ export function SettingsDrawer() {
       suporte: "/app/suporte",
     }
 
-    if (s === "whatsapp" || s === "telegram") {
+    if (s === "whatsapp") {
       closeDrawer()
       void openIntegrationChat(s)
       return

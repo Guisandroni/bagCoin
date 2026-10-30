@@ -11,7 +11,7 @@ Run these from the project root directory.
 
 | Command | Description |
 |---------|-------------|
-| `make quickstart` | Install deps, start Docker, run migrations, create admin user |
+| `make quickstart` | Build and start the development stack; the API applies migrations |
 | `make install` | Install backend dependencies with uv + pre-commit hooks |
 
 ### Development
@@ -31,7 +31,7 @@ Run these from the project root directory.
 
 | Command | Description |
 |---------|-------------|
-| `make db-init` | Start PostgreSQL + create initial migration + apply |
+| `make db-init` | Start the development stack; the API applies migrations |
 | `make db-migrate` | Create new migration (prompts for message) |
 | `make db-upgrade` | Apply pending migrations |
 | `make db-downgrade` | Rollback last migration |
@@ -46,36 +46,19 @@ Run these from the project root directory.
 | `make user-create` | Create new user (interactive) |
 | `make user-list` | List all users |
 
-### Celery
-
-| Command | Description |
-|---------|-------------|
-| `make celery-worker` | Start Celery worker |
-| `make celery-beat` | Start Celery beat scheduler |
-| `make celery-flower` | Start Flower monitoring UI (port 5555) |
-
 ### Docker (Development)
 
 | Command | Description |
 |---------|-------------|
-| `make docker-up` | Start all backend services |
+| `make docker-up` | Build and start the development stack |
 | `make docker-down` | Stop all services |
-| `make docker-logs` | Follow backend logs |
-| `make docker-build` | Build backend images |
+| `make docker-logs` | Follow service logs |
+| `make docker-build` | Build development images |
 | `make docker-shell` | Open shell in app container |
 | `make docker-db` | Start only PostgreSQL |
 | `make docker-db-stop` | Stop PostgreSQL |
 | `make docker-redis` | Start only Redis |
 | `make docker-redis-stop` | Stop Redis |
-
-### Docker (Production with Traefik)
-
-| Command | Description |
-|---------|-------------|
-| `make docker-prod` | Start production stack |
-| `make docker-prod-down` | Stop production stack |
-| `make docker-prod-logs` | Follow production logs |
-| `make docker-prod-build` | Build production images |
 
 ---
 
@@ -84,7 +67,7 @@ Run these from the project root directory.
 All project CLI commands are invoked via:
 
 ```bash
-cd backend
+cd apps/server
 uv run bagcoin_api <group> <command> [options]
 ```
 
@@ -133,17 +116,6 @@ uv run bagcoin_api user set-role user@example.com --role admin
 
 # List all users
 uv run bagcoin_api user list
-```
-
-### Celery Commands
-
-```bash
-uv run bagcoin_api celery worker                    # Start worker
-uv run bagcoin_api celery worker --loglevel debug   # Debug logging
-uv run bagcoin_api celery worker --concurrency 8    # 8 worker processes
-uv run bagcoin_api celery beat                      # Start scheduler
-uv run bagcoin_api celery flower                    # Start Flower UI
-uv run bagcoin_api celery flower --port 5556        # Custom Flower port
 ```
 
 ### Custom Commands

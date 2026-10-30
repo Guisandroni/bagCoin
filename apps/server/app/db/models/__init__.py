@@ -21,6 +21,7 @@ from app.db.models.agent_log import AgentLog
 from app.db.models.credit_card import CreditCard
 from app.db.models.account import Account
 from app.db.models.integration_link_token import IntegrationLinkToken
+from app.db.models.evolution_event import EvolutionEvent, EvolutionReply
 
 __all__ = [
     "User",
@@ -49,4 +50,6 @@ __all__ = [
     "CreditCard",
     "Account",
     "IntegrationLinkToken",
+    "EvolutionEvent",
+    "EvolutionReply",
 ]

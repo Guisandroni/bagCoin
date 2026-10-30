@@ -9,7 +9,7 @@ from pydantic import Field
 
 from app.schemas.base import BaseSchema
 
-IntegrationChannel = Literal["whatsapp", "telegram"]
+IntegrationChannel = Literal["whatsapp"]
 
 
 class LinkTokenRequest(BaseSchema):
@@ -20,12 +20,9 @@ class LinkTokenResponse(BaseSchema):
     token: str
     expires_at: datetime
     deeplink_whatsapp: str | None = None
-    deeplink_telegram: str | None = None
     manual_command_whatsapp: str
-    manual_command_telegram: str
 
 
 class IntegrationStatus(BaseSchema):
     whatsapp_linked: bool
-    telegram_linked: bool
     phone_number: str | None = None

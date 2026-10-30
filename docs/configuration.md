@@ -16,7 +16,7 @@ print(settings.DEBUG)
 ## Getting Started
 
 ```bash
-cd backend
+cd apps/server
 
 # Copy the example file (may already exist if generated with --generate-env)
 cp .env.example .env
@@ -125,13 +125,6 @@ AI_AVAILABLE_MODELS=["gpt-4.1-mini","gpt-4.1","claude-sonnet-4-6"]
 | `LANGCHAIN_PROJECT` | `bagcoin_api` | Project name in LangSmith |
 | `LANGCHAIN_ENDPOINT` | `https://api.smith.langchain.com` | LangSmith API endpoint |
 
-## Celery
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CELERY_BROKER_URL` | `redis://localhost:6379/0` | Celery broker URL |
-| `CELERY_RESULT_BACKEND` | `redis://localhost:6379/0` | Celery result backend URL |
-
 ## CORS
 
 | Variable | Default | Description |
@@ -144,24 +137,8 @@ AI_AVAILABLE_MODELS=["gpt-4.1-mini","gpt-4.1","claude-sonnet-4-6"]
 Production validation: `CORS_ORIGINS` cannot contain `"*"` in
 `ENVIRONMENT=production`.
 
-## Docker / Production
+## Development Compose
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DOMAIN` | `example.com` | Production domain (for Traefik) |
-| `ACME_EMAIL` | `admin@example.com` | Let's Encrypt email for SSL certs |
-| `REDIS_PASSWORD` | `change-me-in-production` | Redis password for production |
-| `FLOWER_USER` | `admin` | Flower monitoring UI username |
-| `FLOWER_PASSWORD` | `change-me-in-production` | Flower monitoring UI password |
+The root `.env` supplies the Compose database and Evolution settings. The API reads `apps/server/.env`; Compose overrides the database, Redis, Evolution URL and email provider for its Docker network. See [the setup guide](../README.md#desenvolvimento-local) and the example files.
 
-## Production Checklist
-
-Before deploying to production, ensure these variables are properly set:
-1. `SECRET_KEY` -- Generate a unique 64-character hex key: `openssl rand -hex 32`
-2. `API_KEY` -- Generate a unique key: `openssl rand -hex 32`
-3. `ENVIRONMENT` -- Set to `production`
-4. `DEBUG` -- Set to `false`
-5. `POSTGRES_PASSWORD` -- Use a strong, unique password
-6. `CORS_ORIGINS` -- List only your actual frontend domain(s)
-7. `REDIS_PASSWORD` -- Set a strong password
-8. `OPENAI_API_KEY` -- Your production API key
+The Evolution database uses separate credentials and a separate database. `EVOLUTION_API_KEY` and `EVOLUTION_WEBHOOK_SECRET` must be different. `RESEND_API_KEY` and `RESEND_FROM_EMAIL` configure email delivery.

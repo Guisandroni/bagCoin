@@ -27,8 +27,6 @@ from app.schemas.budget import BudgetCreate, BudgetUpdate, BudgetResponse, Budge
 from app.schemas.goal import GoalCreate, GoalUpdate, GoalResponse
 from app.schemas.category import CategoryCreate, CategoryUpdate, CategoryResponse
 from app.schemas.common import (
-    WebhookPayload,
-    WhatsAppResponse,
     ExtractedTransaction,
     QueryResult,
     ReportRequest,
@@ -70,8 +68,6 @@ __all__ = [
     "CategoryCreate",
     "CategoryUpdate",
     "CategoryResponse",
-    "WebhookPayload",
-    "WhatsAppResponse",
     "ExtractedTransaction",
     "QueryResult",
     "ReportRequest",

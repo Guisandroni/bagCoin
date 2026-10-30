@@ -126,10 +126,6 @@ class Settings(BaseSettings):
             return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
-    # === Celery ===
-    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
-
     # === AI Agent (langgraph, openai) ===
     OPENAI_API_KEY: str = ""
     AI_MODEL: str = "gpt-5-mini"
@@ -176,7 +172,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
 
     # === SMTP / Email Verification ===
-    EMAIL_PROVIDER: str = "smtp"  # smtp | resend_api
+    EMAIL_PROVIDER: str = "resend_api"  # smtp | resend_api
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
@@ -198,18 +194,14 @@ class Settings(BaseSettings):
     PASSWORD_RESET_SEND_LIMIT_PER_HOUR: int = 5
     SUPPORT_EMAIL: str = ""
 
-    # === WhatsApp Bridge ===
-    WHATSAPP_BRIDGE_URL: str = "http://whatsapp-bridge:3001"
-    WHATSAPP_API_KEY: str = "bagcoin_webhook_secret_123"
+    # === Evolution API ===
+    EVOLUTION_API_URL: str = ""
+    EVOLUTION_API_KEY: str = ""
+    EVOLUTION_INSTANCE_NAME: str = ""
+    EVOLUTION_WEBHOOK_SECRET: str = ""
 
-    # === Internal base URL used by bridges to fetch reports ===
-    # Points to the backend service as seen from the bridges' network.
-    # In Docker Compose this is typically http://app:8000.
-    INTERNAL_API_BASE_URL: str = "http://app:8000"
-
-    # === Bot deep links (web ↔ WhatsApp/Telegram pairing) ===
+    # === Bot deep links (web ↔ WhatsApp pairing) ===
     BOT_WHATSAPP_NUMBER: str = ""  # E.164 digits only, e.g. 5511999999999
-    BOT_TELEGRAM_USERNAME: str = ""  # without @
     INTEGRATION_LINK_TOKEN_TTL_SECONDS: int = 600
 
     # === LangSmith Observability ===

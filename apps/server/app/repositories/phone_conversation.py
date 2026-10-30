@@ -1,6 +1,6 @@
 """PhoneConversation repository (PostgreSQL async).
 
-Tracks WhatsApp/Telegram conversation context for BagCoin agents.
+Tracks WhatsApp conversation context for BagCoin agents.
 """
 
 from datetime import datetime, UTC

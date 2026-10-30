@@ -1,4 +1,4 @@
-"""PhoneConversation model — WhatsApp/Telegram conversation context tracking."""
+"""PhoneConversation model — WhatsApp conversation context tracking."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 class PhoneConversation(Base, TimestampMixin):
-    """Tracks WhatsApp/Telegram conversation context for BagCoin agents."""
+    """Tracks WhatsApp conversation context for BagCoin agents."""
 
     __tablename__ = "phone_conversations"
 

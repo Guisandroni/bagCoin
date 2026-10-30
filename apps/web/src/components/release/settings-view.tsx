@@ -6,7 +6,6 @@ import {
   Home,
   LifeBuoy,
   MessageSquare,
-  // Send,
   Target,
   User,
   Wallet,
@@ -18,7 +17,7 @@ import type { ReleaseProfile } from "./types"
 interface SettingsViewProps {
   profile: ReleaseProfile
   onNavigate?: (section: string) => void
-  openingChannel?: "whatsapp" | "telegram" | null
+  openingChannel?: "whatsapp" | null
   activeSection?: string
 }
 
@@ -50,7 +49,6 @@ export function SettingsView({
       title: "Chatbot",
       items: [
         { id: "whatsapp", label: openingChannel === "whatsapp" ? "Abrindo WhatsApp..." : "WhatsApp", icon: MessageSquare },
-        // { id: "telegram", label: openingChannel === "telegram" ? "Abrindo Telegram..." : "Telegram", icon: Send },
       ],
     },
   ]

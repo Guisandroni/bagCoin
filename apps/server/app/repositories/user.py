@@ -1,6 +1,6 @@
 """Unified User repository (PostgreSQL async).
 
-Handles both web (email/Google) and agent (phone/telegram) users.
+Handles both web (email/Google) and agent (phone) users.
 """
 
 from typing import Any
@@ -31,12 +31,6 @@ async def get_by_google_id(db: AsyncSession, google_id: str) -> User | None:
 async def get_by_phone_number(db: AsyncSession, phone_number: str) -> User | None:
     """Get user by phone number."""
     result = await db.execute(select(User).where(User.phone_number == phone_number))
-    return result.scalar_one_or_none()
-
-
-async def get_by_telegram_chat_id(db: AsyncSession, telegram_chat_id: str) -> User | None:
-    """Get user by Telegram chat ID."""
-    result = await db.execute(select(User).where(User.telegram_chat_id == telegram_chat_id))
     return result.scalar_one_or_none()
 
 
@@ -98,7 +92,6 @@ async def create(
     email_verification_attempts: int = 0,
     role: str = "user",
     platform: str | None = None,
-    telegram_chat_id: str | None = None,
     preferences: dict | None = None,
     financial_profile: dict | None = None,
 ) -> User:
@@ -118,7 +111,6 @@ async def create(
         email_verification_attempts=email_verification_attempts,
         role=role,
         platform=platform,
-        telegram_chat_id=telegram_chat_id,
         preferences=preferences or {},
         financial_profile=financial_profile or {},
     )

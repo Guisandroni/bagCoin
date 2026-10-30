@@ -81,19 +81,11 @@ def process_multimodal_node(state: AgentState) -> AgentState:
     # Web ↔ bot pairing (same entry as multimodal; text-only)
     from app.services.integration_service import try_consume_link_pairing_sync
 
-    ctx = state.get("context") or {}
-    integration_channel: str = ctx.get("channel") or (
-        "telegram"
-        if str(state.get("phone_number", "")).startswith("telegram:")
-        else "whatsapp"
-    )
-    if integration_channel not in ("whatsapp", "telegram"):
-        integration_channel = "whatsapp"
     if state.get("source_format") == "text":
         reply = try_consume_link_pairing_sync(
             phone_number=state["phone_number"],
             message=state.get("message") or "",
-            channel=integration_channel,  # type: ignore[arg-type]
+            channel="whatsapp",
             source_format=state.get("source_format", "text"),
         )
         if reply is not None:
