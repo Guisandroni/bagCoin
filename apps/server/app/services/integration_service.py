@@ -1,4 +1,4 @@
-"""Web ↔ WhatsApp/Telegram pairing via short-lived opaque tokens."""
+"""Web ↔ WhatsApp pairing via short-lived opaque tokens."""
 
 from __future__ import annotations
 
@@ -31,17 +31,12 @@ LINK_TOKEN_RE = re.compile(
     re.IGNORECASE,
 )
 
-IntegrationChannel = Literal["whatsapp", "telegram"]
+IntegrationChannel = Literal["whatsapp"]
 
 
 def _whatsapp_bot_digits() -> str:
     """E.164 digits only for wa.me deeplinks."""
     return (settings.BOT_WHATSAPP_NUMBER or "").strip().replace("+", "").replace(" ", "")
-
-
-def _telegram_bot_username() -> str:
-    """Telegram bot username without @."""
-    return (settings.BOT_TELEGRAM_USERNAME or "").strip().lstrip("@")
 
 
 def parse_link_token_from_message(message: str) -> str | None:
@@ -134,11 +129,6 @@ def _merge_channel_user_into_web_user_sync(db: Session, web_user: User, channel_
         channel_user.phone_number = None
         db.flush()
         web_user.phone_number = phone_number
-    if channel_user.telegram_chat_id and not web_user.telegram_chat_id:
-        telegram_chat_id = channel_user.telegram_chat_id
-        channel_user.telegram_chat_id = None
-        db.flush()
-        web_user.telegram_chat_id = telegram_chat_id
     if not web_user.platform and channel_user.platform:
         web_user.platform = channel_user.platform
     if not web_user.preferences and channel_user.preferences:
@@ -202,7 +192,7 @@ def try_consume_link_pairing_sync(
         "Gere um novo em Configurações → Integrações no site."
     )
     err_channel = (
-        "Este link foi gerado para outro canal. Use o botão certo (WhatsApp ou Telegram) no site."
+        "Este link foi gerado para outro canal. Use o botão do WhatsApp no site."
     )
 
     db = sync_session_maker()
@@ -307,16 +297,13 @@ class IntegrationService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    def _build_deeplinks(self, token: str) -> tuple[str | None, str | None, str, str]:
+    def _build_deeplinks(self, token: str) -> tuple[str | None, str]:
         wa_cmd = f"Enviando token para autenticacao. #bagcoin link {token}"
-        tg_cmd = f"/start {token}"
         wa_num = _whatsapp_bot_digits()
         deeplink_wa = (
             f"https://wa.me/{wa_num}?text={quote(wa_cmd, safe='')}" if wa_num else None
         )
-        tg_user = _telegram_bot_username()
-        deeplink_tg = f"https://t.me/{tg_user}?start={token}" if tg_user else None
-        return deeplink_wa, deeplink_tg, wa_cmd, tg_cmd
+        return deeplink_wa, wa_cmd
 
     async def create_link_token(
         self,
@@ -332,16 +319,6 @@ class IntegrationService:
                 code="INTEGRATION_BOT_NOT_CONFIGURED",
                 details={"channel": "whatsapp", "missing_env": "BOT_WHATSAPP_NUMBER"},
             )
-        if channel == "telegram" and not _telegram_bot_username():
-            raise ValidationError(
-                message=(
-                    "O bot Telegram não está configurado no servidor. "
-                    "Peça ao administrador para definir BOT_TELEGRAM_USERNAME."
-                ),
-                code="INTEGRATION_BOT_NOT_CONFIGURED",
-                details={"channel": "telegram", "missing_env": "BOT_TELEGRAM_USERNAME"},
-            )
-
         ttl = settings.INTEGRATION_LINK_TOKEN_TTL_SECONDS
         expires_at = datetime.now(UTC) + timedelta(seconds=ttl)
 
@@ -363,22 +340,18 @@ class IntegrationService:
         else:
             raise RuntimeError("Could not allocate unique pairing token")
 
-        deeplink_wa, deeplink_tg, wa_cmd, tg_cmd = self._build_deeplinks(token)
+        deeplink_wa, wa_cmd = self._build_deeplinks(token)
         return LinkTokenResponse(
             token=token,
             expires_at=expires_at,
             deeplink_whatsapp=deeplink_wa,
-            deeplink_telegram=deeplink_tg,
             manual_command_whatsapp=wa_cmd,
-            manual_command_telegram=tg_cmd,
         )
 
     async def status(self, user: User) -> IntegrationStatus:
         phone = user.phone_number
         wa = bool(phone and not phone.startswith("telegram:"))
-        tg = bool(phone and phone.startswith("telegram:"))
         return IntegrationStatus(
             whatsapp_linked=wa,
-            telegram_linked=tg,
             phone_number=phone,
         )

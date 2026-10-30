@@ -8,7 +8,7 @@ from pydantic import Field
 from app.schemas.base import BaseSchema, TimestampSchema
 from app.schemas.enums import SourceFormat, TransactionType
 
-# === Internal schemas (WhatsApp/Telegram) ===
+# === Internal schemas (WhatsApp) ===
 
 
 class TransactionCreate(BaseSchema):

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { MessageSquare, Loader2, Send } from "lucide-react"
+import { MessageSquare, Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { ConnectIntegrationModal } from "@/components/integrations/connect-modal"
@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils"
 export default function IntegracoesPage() {
   const [modal, setModal] = useState<{
     open: boolean
-    channel: "whatsapp" | "telegram"
+    channel: "whatsapp"
     nonce: number
   }>({
     open: false,
@@ -28,7 +28,7 @@ export default function IntegracoesPage() {
         <div>
           <h1 className="section-title">Integrações</h1>
           <p className="mt-1 text-[14px] text-muted-foreground">
-            Conecte WhatsApp ou Telegram para lançar pelo chat.
+            Conecte WhatsApp para lançar pelo chat.
           </p>
         </div>
         <Link
@@ -48,10 +48,6 @@ export default function IntegracoesPage() {
             <li>
               WhatsApp:{" "}
               <span className="font-medium">{status?.whatsapp_linked ? "conectado" : "não conectado"}</span>
-            </li>
-            <li>
-              Telegram:{" "}
-              <span className="font-medium">{status?.telegram_linked ? "conectado" : "não conectado"}</span>
             </li>
             {status?.phone_number ? (
               <li className="text-muted-foreground">
@@ -108,51 +104,6 @@ export default function IntegracoesPage() {
           </Button>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted">
-                <Send className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="font-semibold">Telegram</p>
-                <p className="text-[13px] text-muted-foreground">Mesmo fluxo no Telegram</p>
-              </div>
-            </div>
-            <Badge
-              className={
-                status?.telegram_linked
-                  ? "border-0 bg-success/15 text-success hover:bg-success/20"
-                  : "bg-muted"
-              }
-            >
-              {status?.telegram_linked ? "Conectado" : "Não conectado"}
-            </Badge>
-          </div>
-          <Button
-            variant="secondary"
-            className="mt-4 w-full rounded-full font-semibold"
-            disabled={openingChannel !== null}
-            onClick={() => {
-              if (status?.telegram_linked) {
-                setModal({ open: true, channel: "telegram", nonce: Date.now() })
-              } else {
-                void openIntegrationChat("telegram")
-              }
-            }}
-          >
-            {openingChannel === "telegram" ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Abrindo…
-              </>
-            ) : status?.telegram_linked ? (
-              "Gerenciar conexão"
-            ) : (
-              "Conectar Telegram"
-            )}
-          </Button>
-        </div>
       </div>
 
       <ConnectIntegrationModal

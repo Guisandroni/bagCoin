@@ -16,8 +16,7 @@ def _money(value: float) -> str:
 
 
 def _channel_from_context(context: dict | None) -> str:
-    channel = (context or {}).get("channel") or "whatsapp"
-    return str(channel) if channel in {"whatsapp", "telegram"} else "whatsapp"
+    return "whatsapp"
 
 
 def _date_from_recurring_day(day: int | None) -> str | None:

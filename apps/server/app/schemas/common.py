@@ -7,45 +7,6 @@ from app.schemas.base import BaseSchema
 from app.schemas.enums import IntentType, SourceFormat
 
 
-class WebhookPayload(BaseSchema):
-    """Incoming webhook payload from WhatsApp bridge."""
-
-    phone_number: str
-    message: str = ""
-    type: str = "chat"
-    timestamp: int = 0
-    hasMedia: bool = False
-    media: dict | None = None
-    raw_data: dict | None = None
-
-
-class WhatsAppResponse(BaseSchema):
-    """Outgoing response to the WhatsApp bridge."""
-
-    reply: str
-    document: dict | None = None
-    media: dict | None = None
-    actions: list[dict] | None = None
-
-
-class TelegramWebhookPayload(BaseSchema):
-    """Incoming webhook payload from Telegram bridge."""
-
-    chat_id: str
-    message: str = ""
-    username: str | None = None
-    source_format: str = "text"
-    media: dict | None = None
-
-
-class TelegramResponse(BaseSchema):
-    """Outgoing response to the Telegram caller."""
-
-    reply: str
-    media: dict | None = None
-    actions: list
-
-
 class ExtractedTransaction(BaseSchema):
     """Transaction data extracted by the AI agent from natural language."""
 

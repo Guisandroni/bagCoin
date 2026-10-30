@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useReducer, useRef, useState } from "react"
+import { useEffect, useMemo, useReducer, useRef } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   Dialog,
@@ -9,7 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import {
@@ -40,7 +39,6 @@ export function ConnectIntegrationModal({
   openNonce,
   manageMode = false,
 }: ConnectIntegrationModalProps) {
-  const [tab, setTab] = useState<IntegrationChannel>(defaultChannel)
   const [, bumpRemaining] = useReducer((n: number) => n + 1, 0)
   const queryClient = useQueryClient()
   const lastInvalidatedAt = useRef(0)
@@ -48,8 +46,8 @@ export function ConnectIntegrationModal({
   const statusQuery = useIntegrationStatus(open)
 
   const tokenQuery = useQuery({
-    queryKey: ["integrations", "link-token", tab, openNonce],
-    queryFn: () => fetchIntegrationLinkToken(tab),
+    queryKey: ["integrations", "link-token", defaultChannel, openNonce],
+    queryFn: () => fetchIntegrationLinkToken(defaultChannel),
     enabled: open && openNonce > 0,
     staleTime: 0,
     gcTime: 0,
@@ -82,16 +80,12 @@ export function ConnectIntegrationModal({
   useEffect(() => {
     const s = statusQuery.data
     if (!open || !s) return
-    if (tab === "whatsapp" && s.whatsapp_linked) {
+    if (s.whatsapp_linked) {
       onOpenChange(false)
     }
-    if (tab === "telegram" && s.telegram_linked) {
-      onOpenChange(false)
-    }
-  }, [open, statusQuery.data, tab, onOpenChange])
+  }, [open, statusQuery.data, onOpenChange])
 
   const deeplinkWhatsApp = tokenPayload?.deeplink_whatsapp ?? null
-  const deeplinkTelegram = tokenPayload?.deeplink_telegram ?? null
 
   const busy = tokenQuery.isFetching
 
@@ -100,7 +94,7 @@ export function ConnectIntegrationModal({
       <DialogContent className="max-w-md rounded-2xl">
         <DialogHeader>
           <DialogTitle>
-            {manageMode ? "Gerenciar integração" : "Conectar WhatsApp ou Telegram"}
+            {manageMode ? "Gerenciar integração" : "Conectar WhatsApp"}
           </DialogTitle>
           <DialogDescription>
             {manageMode
@@ -109,23 +103,7 @@ export function ConnectIntegrationModal({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs
-          value={tab}
-          onValueChange={(v) => {
-            setTab(v as IntegrationChannel)
-          }}
-        >
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
-            <TabsTrigger value="telegram">Telegram</TabsTrigger>
-          </TabsList>
-          <TabsContent value="whatsapp" className="space-y-4 pt-4">
-            <ChannelPanel deeplink={deeplinkWhatsApp} label="WhatsApp" busy={busy} />
-          </TabsContent>
-          <TabsContent value="telegram" className="space-y-4 pt-4">
-            <ChannelPanel deeplink={deeplinkTelegram} label="Telegram" busy={busy} />
-          </TabsContent>
-        </Tabs>
+        <ChannelPanel deeplink={deeplinkWhatsApp} label="WhatsApp" busy={busy} />
 
         {tokenPayload && (
           <div className="space-y-2">
@@ -171,7 +149,7 @@ function ChannelPanel({
   if (!deeplink) {
     return (
       <p className="text-sm text-muted-foreground">
-        Bot não configurado no servidor. Peça ao administrador para definir <code className="rounded bg-muted px-1 py-0.5 text-xs">BOT_WHATSAPP_NUMBER</code> (WhatsApp) ou <code className="rounded bg-muted px-1 py-0.5 text-xs">BOT_TELEGRAM_USERNAME</code> (Telegram).
+        Bot não configurado no servidor. Peça ao administrador para definir <code className="rounded bg-muted px-1 py-0.5 text-xs">BOT_WHATSAPP_NUMBER</code>.
       </p>
     )
   }

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 async def send_plain_email(*, to_email: str, subject: str, body: str, reply_to: str | None = None) -> None:
     """Send a plain-text email using the configured provider."""
-    provider = (settings.EMAIL_PROVIDER or "smtp").strip().lower()
+    provider = (settings.EMAIL_PROVIDER or "resend_api").strip().lower()
     if provider == "smtp":
         await _send_smtp(to_email=to_email, subject=subject, body=body, reply_to=reply_to)
         return

@@ -47,7 +47,6 @@ services, which in turn delegate to repositories.
 | `core/security.py` | JWT / API key utilities |
 | `agents/` | AI agents and tools |
 | `commands/` | Django-style CLI commands |
-| `worker/` | Background task definitions |
 
 ## Layer Responsibilities
 

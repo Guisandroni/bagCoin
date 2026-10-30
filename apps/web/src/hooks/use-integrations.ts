@@ -5,20 +5,17 @@ import axios from "axios"
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query"
 import apiClient from "@/lib/api-client"
 
-export type IntegrationChannel = "whatsapp" | "telegram"
+export type IntegrationChannel = "whatsapp"
 
 export interface LinkTokenResponse {
   token: string
   expires_at: string
   deeplink_whatsapp: string | null
-  deeplink_telegram: string | null
   manual_command_whatsapp: string
-  manual_command_telegram: string
 }
 
 export interface IntegrationStatus {
   whatsapp_linked: boolean
-  telegram_linked: boolean
   phone_number: string | null
 }
 
@@ -52,9 +49,7 @@ export function normalizeLinkTokenPayload(data: LinkTokenResponse & Record<strin
     token: String(d.token ?? ""),
     expires_at: String(d.expires_at ?? ""),
     deeplink_whatsapp: (d.deeplink_whatsapp ?? d.deeplinkWhatsapp ?? null) as string | null,
-    deeplink_telegram: (d.deeplink_telegram ?? d.deeplinkTelegram ?? null) as string | null,
     manual_command_whatsapp: String(d.manual_command_whatsapp ?? d.manualCommandWhatsapp ?? ""),
-    manual_command_telegram: String(d.manual_command_telegram ?? d.manualCommandTelegram ?? ""),
   }
 }
 
@@ -68,7 +63,7 @@ export async function fetchIntegrationLinkToken(channel: IntegrationChannel): Pr
 
 type ApiErrorPayload = { error?: { code?: string; message?: string } }
 
-/** True when API refused pairing because BOT_WHATSAPP_NUMBER / BOT_TELEGRAM_USERNAME is missing. */
+/** True when API refused pairing because BOT_WHATSAPP_NUMBER is missing. */
 export function isIntegrationBotNotConfigured(err: unknown): boolean {
   if (!axios.isAxiosError(err)) return false
   const payload = err.response?.data as ApiErrorPayload | undefined
@@ -87,7 +82,7 @@ export function getIntegrationLinkErrorMessage(err: unknown): string {
 }
 
 /**
- * POST link-token, open WhatsApp/Telegram with prefilled message (deeplink).
+ * POST link-token, open WhatsApp with prefilled message (deeplink).
  * Starts a short background poll on integration status.
  * No user-visible toasts (silent failure paths).
  */
@@ -96,7 +91,7 @@ export async function openIntegrationChat(
   queryClient: QueryClient
 ): Promise<void> {
   const data = await fetchIntegrationLinkToken(channel)
-  const deeplink = channel === "whatsapp" ? data.deeplink_whatsapp : data.deeplink_telegram
+  const deeplink = data.deeplink_whatsapp
 
   void queryClient.invalidateQueries({ queryKey: ["integrations", "status"] })
   startIntegrationPairingPoll(queryClient)

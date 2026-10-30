@@ -33,7 +33,7 @@ class UserRole(StrEnum):
 
 
 class User(Base, TimestampMixin):
-    """Unified user model for web and agent (WhatsApp/Telegram) channels."""
+    """Unified user model for web and agent (WhatsApp) channels."""
 
     __tablename__ = "users"
 
@@ -55,9 +55,8 @@ class User(Base, TimestampMixin):
     password_reset_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     password_reset_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Agent fields (WhatsApp/Telegram)
+    # Agent fields (WhatsApp)
     phone_number: Mapped[str | None] = mapped_column(String(80), unique=True, index=True, nullable=True)
-    telegram_chat_id: Mapped[str | None] = mapped_column(String(50), unique=True, nullable=True, index=True)
     platform: Mapped[str | None] = mapped_column(String(20), nullable=True)
     preferences: Mapped[dict | None] = mapped_column(JSON, default=dict, nullable=True)
     financial_profile: Mapped[dict | None] = mapped_column(JSON, default=dict, nullable=True)

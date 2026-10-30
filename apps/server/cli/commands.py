@@ -129,66 +129,6 @@ def db_history():
     command.history(alembic_cfg)
 
 
-# === Celery Commands ===
-@cli.group("celery")
-def celery_cli():
-    """Celery worker commands."""
-    pass
-
-
-@celery_cli.command("worker")
-@click.option("--loglevel", default="info", help="Log level (debug, info, warning, error)")
-@click.option("--concurrency", default=4, type=int, help="Number of concurrent workers")
-def celery_worker(loglevel: str, concurrency: int):
-    """Start Celery worker."""
-    import subprocess
-
-    subprocess.run(
-        [
-            "celery",
-            "-A",
-            "app.worker.celery_app",
-            "worker",
-            f"--loglevel={loglevel}",
-            f"--concurrency={concurrency}",
-        ]
-    )
-
-
-@celery_cli.command("beat")
-@click.option("--loglevel", default="info", help="Log level (debug, info, warning, error)")
-def celery_beat(loglevel: str):
-    """Start Celery beat scheduler."""
-    import subprocess
-
-    subprocess.run(
-        [
-            "celery",
-            "-A",
-            "app.worker.celery_app",
-            "beat",
-            f"--loglevel={loglevel}",
-        ]
-    )
-
-
-@celery_cli.command("flower")
-@click.option("--port", default=5555, type=int, help="Flower web UI port")
-def celery_flower(port: int):
-    """Start Flower monitoring UI."""
-    import subprocess
-
-    subprocess.run(
-        [
-            "celery",
-            "-A",
-            "app.worker.celery_app",
-            "flower",
-            f"--port={port}",
-        ]
-    )
-
-
 # === User Commands ===
 @cli.group("user")
 def user_cli():

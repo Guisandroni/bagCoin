@@ -25,9 +25,7 @@ def create_document_tools(phone_number: str, context: dict[str, Any] | None = No
     """Create document tools with media and tenant context captured in closures."""
     context = context or {}
     media = context.get("media") or {}
-    channel = str(context.get("channel") or "whatsapp")
-    if channel not in {"whatsapp", "telegram"}:
-        channel = "whatsapp"
+    channel = "whatsapp"
 
     @tool
     def analyze_uploaded_document() -> str:

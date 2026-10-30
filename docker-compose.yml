@@ -1,277 +1,140 @@
-# Backend development configuration
-# Usage: docker-compose up -d
-
+# Desenvolvimento local: docker compose up --build
 services:
   app:
     build:
       context: ./apps/server
-      dockerfile: Dockerfile
-    image: bagcoin_api_backend:dev
-    container_name: bagcoin_api_backend
-    ports:
-      - "8000:8000"
-    volumes:
-      - media_data:/app/media
-      - reports_data:/app/reports
     env_file:
       - ./apps/server/.env
     environment:
-      - DEBUG=true
-      - ENVIRONMENT=local
-      - POSTGRES_HOST=db
-      - REDIS_HOST=redis
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      # BagCoin env vars
-      - GROQ_API_KEY=${GROQ_API_KEY:-coloque_sua_chave_groq_aqui}
-      - OPENCODE_API_KEY=${OPENCODE_API_KEY:-coloque_sua_chave_opencode_aqui}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-sua_chave_deepseek_aqui}
-      - TAVILY_API_KEY=${TAVILY_API_KEY:-coloque_sua_chave_tavily_aqui}
-      - DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL:-deepseek-v4-flash}
-      - WHATSAPP_BRIDGE_URL=${WHATSAPP_BRIDGE_URL:-http://whatsapp-bridge:3001}
-      - WHATSAPP_API_KEY=${WHATSAPP_API_KEY:-bagcoin_webhook_secret_123}
-      - API_KEY=${API_KEY:-bagcoin_webhook_secret_123}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
-      # Email settings come from apps/server/.env (loaded by env_file above).
-      # For local Resend tests set EMAIL_PROVIDER=resend_api plus
-      # RESEND_API_KEY and RESEND_FROM_EMAIL in that ignored file.
-      - SUPPORT_EMAIL=${SUPPORT_EMAIL:-}
-      - EMAIL_VERIFICATION_TTL_SECONDS=${EMAIL_VERIFICATION_TTL_SECONDS:-600}
-      - EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS=${EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS:-60}
-      - EMAIL_VERIFICATION_MAX_ATTEMPTS=${EMAIL_VERIFICATION_MAX_ATTEMPTS:-5}
-      - EMAIL_VERIFICATION_SEND_LIMIT_PER_HOUR=${EMAIL_VERIFICATION_SEND_LIMIT_PER_HOUR:-5}
-      - EMAIL_VERIFICATION_SEND_LIMIT_PER_IP_PER_HOUR=${EMAIL_VERIFICATION_SEND_LIMIT_PER_IP_PER_HOUR:-20}
-      - EMAIL_VERIFICATION_VERIFY_LIMIT_PER_10_MIN=${EMAIL_VERIFICATION_VERIFY_LIMIT_PER_10_MIN:-10}
-    networks:
-      - backend
+      DEBUG: "true"
+      ENVIRONMENT: local
+      EMAIL_PROVIDER: resend_api
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-bagcoin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bagcoin123}
+      POSTGRES_DB: ${POSTGRES_DB:-bagcoin}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ""
+      EVOLUTION_API_URL: http://evolution-api:8080
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
+      EVOLUTION_INSTANCE_NAME: ${EVOLUTION_INSTANCE_NAME:-}
+      EVOLUTION_WEBHOOK_SECRET: ${EVOLUTION_WEBHOOK_SECRET:-}
+    volumes:
+      - ./apps/server/app:/app/app
+      - ./apps/server/alembic:/app/alembic
+      - ./apps/server/cli:/app/cli
+      - media_data:/app/media
+      - reports_data:/app/reports
+    ports:
+      - "127.0.0.1:8000:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8000/api/v1/health')\" || exit 1"]
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/api/v1/health', timeout=5).raise_for_status()"]
       interval: 15s
-      timeout: 5s
+      timeout: 6s
       retries: 5
-      start_period: 10s
-    restart: unless-stopped
-
-  db:
-    image: postgres:16-alpine
-    container_name: bagcoin_api_db
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER:-bagcoin}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-bagcoin123}
-      - POSTGRES_DB=${POSTGRES_DB:-bagcoin}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    # Port exposed only for local development - remove in production
-    ports:
-      - "5432:5432"
-    networks:
-      - backend
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bagcoin} -d ${POSTGRES_DB:-bagcoin}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    container_name: bagcoin_api_redis
-    # Port exposed only for local development - remove in production
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - backend
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  mailpit:
-    image: axllent/mailpit:latest
-    container_name: bagcoin_api_mailpit
-    ports:
-      - "1025:1025"
-      - "8025:8025"
-    networks:
-      - backend
-    restart: unless-stopped
-
-  celery_worker:
-    image: bagcoin_api_backend:dev
-    container_name: bagcoin_api_celery_worker
-    volumes:
-      - ./apps/server/app:/app/app:ro
-      - media_data:/app/media
-      - reports_data:/app/reports
-    command: celery -A app.worker.celery_app worker --loglevel=debug
-    env_file:
-      - ./apps/server/.env
-    environment:
-      - DEBUG=true
-      - POSTGRES_HOST=db
-      - REDIS_HOST=redis
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    networks:
-      - backend
-    depends_on:
-      app:
-        condition: service_started
-      redis:
-        condition: service_healthy
-      db:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "celery -A app.worker.celery_app inspect ping -d celery@$$HOSTNAME 2>&1 | grep -q OK || exit 1",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    restart: unless-stopped
-
-  celery_beat:
-    image: bagcoin_api_backend:dev
-    container_name: bagcoin_api_celery_beat
-    volumes:
-      - ./apps/server/app:/app/app:ro
-    command: celery -A app.worker.celery_app beat --loglevel=debug
-    env_file:
-      - ./apps/server/.env
-    environment:
-      - DEBUG=true
-      - POSTGRES_HOST=db
-      - REDIS_HOST=redis
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    networks:
-      - backend
-    depends_on:
-      app:
-        condition: service_started
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "celery -A app.worker.celery_app status 2>&1 | grep -q 'OK' || exit 1",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    restart: unless-stopped
-
-  flower:
-    image: bagcoin_api_backend:dev
-    container_name: bagcoin_api_flower
-    command: celery -A app.worker.celery_app flower --port=5555
-    ports:
-      - "5555:5555"
-    env_file:
-      - ./apps/server/.env
-    environment:
-      - DEBUG=true
-      - POSTGRES_HOST=db
-      - REDIS_HOST=redis
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    networks:
-      - backend
-    depends_on:
-      app:
-        condition: service_started
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          'python -c "import httpx; httpx.get(''http://localhost:5555/'')" || exit 1',
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
       start_period: 15s
-    restart: unless-stopped
-
-  whatsapp-bridge:
-    build:
-      context: ./apps/whatsapp-bridge
-      dockerfile: Dockerfile
-    image: bagcoin_whatsapp_bridge:dev
-    container_name: bagcoin_whatsapp_bridge
-    ports:
-      - "3001:3001"
-    volumes:
-      - whatsapp_data:/app/whatsapp-session
-    environment:
-      - FASTAPI_URL=http://app:8000/api/v1
-      - WHATSAPP_API_KEY=${WHATSAPP_API_KEY:-bagcoin_webhook_secret_123}
-      - PORT=3001
-    networks:
-      - backend
-    restart: unless-stopped
-
-  telegram-bridge:
-    build:
-      context: ./apps/telegram-bridge
-      dockerfile: Dockerfile
-    image: bagcoin_telegram_bridge:dev
-    container_name: bagcoin_telegram_bridge
-    environment:
-      - BACKEND_URL=http://app:8000
-      - API_KEY=${API_KEY:-bagcoin_webhook_secret_123}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
-    networks:
-      - backend
-    depends_on:
-      app:
-        condition: service_healthy
-    restart: unless-stopped
 
   web:
     build:
       context: ./apps/web
       target: dev
-      args: ["NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}", "NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}"]
-    image: bagcoin_web:dev
-    container_name: bagcoin_web
-    ports:
-      - "3000:3000"
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
-      - API_URL=http://app:8000/api/v1
-      - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
-      - NEXT_TELEMETRY_DISABLED=1
-    mem_limit: 1g
-    networks:
-      - backend
+      API_URL: http://app:8000/api/v1
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "127.0.0.1:3000:3000"
     depends_on:
-      - app
-    restart: unless-stopped
+      app:
+        condition: service_healthy
 
-networks:
-  backend:
-    driver: bridge
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bagcoin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bagcoin123}
+      POSTGRES_DB: ${POSTGRES_DB:-bagcoin}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  evolution-db-init:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: db
+      PGDATABASE: postgres
+      PGUSER: ${POSTGRES_USER:-bagcoin}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-bagcoin123}
+      BAGCOIN_DB_NAME: ${POSTGRES_DB:-bagcoin}
+      EVOLUTION_DB_USER: ${EVOLUTION_DB_USER:-}
+      EVOLUTION_DB_PASSWORD: ${EVOLUTION_DB_PASSWORD:-}
+      EVOLUTION_DB_NAME: ${EVOLUTION_DB_NAME:-}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
+      EVOLUTION_WEBHOOK_SECRET: ${EVOLUTION_WEBHOOK_SECRET:-}
+      EVOLUTION_INSTANCE_NAME: ${EVOLUTION_INSTANCE_NAME:-}
+    volumes:
+      - ./deploy/evolution/init-db.sh:/init-db.sh:ro
+    entrypoint: ["sh", "/init-db.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  evolution-api:
+    # Test-only: v2.3.7 is affected by CVE-2026-48063.
+    image: evoapicloud/evolution-api:v2.3.7
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      SERVER_URL: ${EVOLUTION_PUBLIC_URL:-http://localhost:8080}
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-}
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "false"
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://${EVOLUTION_DB_USER:-}:${EVOLUTION_DB_PASSWORD:-}@db:5432/${EVOLUTION_DB_NAME:-}?schema=public
+      DATABASE_CONNECTION_CLIENT_NAME: bagcoin_evolution
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379/1
+      CACHE_REDIS_PREFIX_KEY: bagcoin_evolution
+      CACHE_LOCAL_ENABLED: "false"
+    volumes:
+      - evolution_instances:/evolution/instances
+    depends_on:
+      evolution-db-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
 volumes:
-  media_data:
   postgres_data:
   redis_data:
+  media_data:
   reports_data:
-  whatsapp_data:
+  evolution_instances:
