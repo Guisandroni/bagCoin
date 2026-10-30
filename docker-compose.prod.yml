@@ -66,7 +66,7 @@ services:
 
   app:
     build:
-      context: ./apps/backend
+      context: ./apps/server
       dockerfile: Dockerfile
     image: bagcoin_api_backend:prod
     pull_policy: build
@@ -94,7 +94,7 @@ services:
       - HUMANIZE_RESPONSES=${HUMANIZE_RESPONSES:-false}
       - ECHO_AUDIO_TRANSCRIPTION=${ECHO_AUDIO_TRANSCRIPTION:-false}
       - IMAGE_STRUCTURED_EXTRACT=${IMAGE_STRUCTURED_EXTRACT:-true}
-    command: node dist/main
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
     networks:
       - traefik-public
       - backend-internal
@@ -112,7 +112,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:8000/api/v1/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
       interval: 15s
       timeout: 5s
       retries: 5

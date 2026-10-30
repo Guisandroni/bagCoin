@@ -8,7 +8,7 @@
 services:
   app:
     build:
-      context: ./apps/backend
+      context: ./apps/server
       dockerfile: Dockerfile
     image: bagcoin_api_backend:dev
     container_name: bagcoin_api_backend
@@ -26,7 +26,7 @@ services:
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    command: node dist/main
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
       - backend
     depends_on:

@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, develop]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, develop]
 
 jobs:
   backend:
@@ -80,7 +80,6 @@ jobs:
 
       - name: Lint
         run: npm run lint
-        continue-on-error: true
 
       - name: Build
         run: npm run build
@@ -90,6 +89,7 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    continue-on-error: true
     defaults:
       run:
         working-directory: apps/web

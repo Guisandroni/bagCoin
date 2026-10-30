@@ -178,17 +178,19 @@ Redis é usado simultaneamente como broker e backend de resultados do Celery.
 
 | Serviço | Responsabilidade |
 |---|---|
-| `celery_worker` | Consome tarefas Celery com concorrência configurada em quatro workers. |
+| `celery_worker` | Consome tarefas Celery; a composição de produção configura concorrência de quatro processos. |
 | `celery_beat` | Publica as tarefas agendadas no broker. |
 | `flower` | Monitora workers e tarefas pela interface Flower. |
 
-No estado atual, a agenda do Beat contém apenas uma tarefa de exemplo executada a cada minuto. Relatórios e demais regras de negócio não devem ser descritos como tarefas Celery até haver uma tarefa de negócio implementada para isso.
+A análise estática identificou três tarefas de exemplo, incluindo uma simulação de envio de e-mail, e uma agenda configurada no Beat a cada minuto. Não foram identificados produtores internos de tarefas de negócio; Relatórios e outras regras de negócio não foram identificados como tarefas Celery. A configuração da agenda não comprova sua execução efetiva.
+
+Produtores externos, filas pendentes e uso em ambientes implantados permanecem desconhecidos: não houve consulta operacional nem deploy nesta investigação. Redis também atende prontidão, limites de autenticação, deduplicação de webhooks e tokens de integração. A recomendação é manter worker, Beat, Flower e Redis até decisão aprovada com evidências operacionais. Consulte a [investigação assíncrona](specs/001-estabilizacao-operacional/research.md) e o [inventário Redis](specs/001-estabilizacao-operacional/research-redis.md).
 
 ## Contêineres, rede e dados
 
 | Serviço | Responsabilidade | Exposição e dependências |
 |---|---|---|
-| `app` | API FastAPI | Processo interno em `8000`; depende de `db` e `redis`. A publicação atual `7000:7000` não corresponde ao processo Uvicorn em `8000`. |
+| `app` | API FastAPI | Porta `8000` no host e no contêiner; depende de `db` e `redis`. |
 | `db` | PostgreSQL 16 | `5432` no host; volume `postgres_data`. |
 | `redis` | Redis 7 | `6379` no host; volume `redis_data`. |
 | `mailpit` | SMTP e interface de e-mail local | `1025` para SMTP e `8025` para a interface. |
@@ -200,6 +202,10 @@ No estado atual, a agenda do Beat contém apenas uma tarefa de exemplo executada
 | `web` | Frontend Next.js | `3000` no host; encaminha a API para `app:8000`. |
 
 Todos os serviços de desenvolvimento usam a rede Docker `backend`. Além dos volumes de banco, Redis e sessão WhatsApp, `media_data` guarda mídia processada e `reports_data` guarda Relatórios gerados.
+
+A tabela descreve `docker-compose.yml`, usado por padrão. `docker-compose.dev.yml` não inclui Mailpit nem as bridges; `docker-compose.frontend.yml` inclui as bridges, mas não Mailpit, e usa a imagem de produção do frontend. As composições compartilham nomes fixos de contêiner e portas, portanto não devem ser iniciadas simultaneamente sem isolamento.
+
+A API em `docker-compose.dev.yml` e `docker-compose.frontend.yml` usa Uvicorn com `--reload`; produção usa `--workers 4`. O healthcheck da API em frontend e produção consulta `/api/v1/health` com `urllib`, que falha em resposta HTTP de erro. No Compose padrão e na imagem herdada por desenvolvimento, o healthcheck usa `httpx.get` sem verificar o status HTTP; uma resposta de erro ainda pode ser considerada saudável. PostgreSQL e Redis usam `pg_isready` e `redis-cli ping`.
 
 ### Produção
 
@@ -234,11 +240,12 @@ docker compose logs -f whatsapp-bridge
 | Bridge WhatsApp | http://localhost:3001/health |
 | Flower | http://localhost:5555 |
 | Mailpit | http://localhost:8025 |
+| API no host | http://localhost:8000/api/v1 |
 | API entre containers | http://app:8000/api/v1 |
 
 Para executar o backend diretamente na máquina, use `make run` na raiz; com a API em execução local e a documentação habilitada, o Swagger fica em `http://localhost:8000/docs`.
 
-A composição de desenvolvimento atualmente publica `app` como `7000:7000`, enquanto Uvicorn escuta em `8000` dentro do container. Por isso, não use `localhost:8000/docs` como verificação do Compose até esse mapeamento ser corrigido.
+Com a composição padrão, verifique a API em `http://localhost:8000/api/v1/health` e, quando habilitado, o Swagger em `http://localhost:8000/docs`.
 
 ## Variáveis de ambiente
 
@@ -267,11 +274,19 @@ Execute os comandos a partir da raiz do repositório.
 | `make celery-beat` | Inicia o agendador Celery local. |
 | `make celery-flower` | Inicia Flower na porta 5555. |
 
+## Integração contínua e deploy
+
+Os workflows [CI](.github/workflows/ci.yml) e [CI/CD Pipeline](.github/workflows/test.yml) executam em pushes e pull requests para `main`, `master` e `develop`. O primeiro verifica lint, formatação, tipos, testes e segurança do backend; sua imagem Docker é construída apenas em push para `main`. O segundo verifica backend e lint, build e testes do frontend; o E2E permanece informativo (`continue-on-error`). A proteção de branches e os checks exigidos devem ser confirmados nas configurações do GitHub.
+
+O workflow de [deploy](.github/workflows/deploy.yml) pode ser acionado manualmente ou por push em `main` nos caminhos configurados. Nenhum deploy foi realizado nesta investigação.
+
 ## Referências no repositório
 
 - [Contexto e vocabulário de domínio](CONTEXT.md)
 - [ADR — Tool agent vs. direct node](docs/adr/0001-tool-agent-vs-direct-node.md)
 - [Deploy Vercel sem Docker](docs/deploy-vercel-sem-docker.md)
 - [Compose de desenvolvimento](docker-compose.yml)
+- [Compose de desenvolvimento explícito](docker-compose.dev.yml)
+- [Compose de frontend](docker-compose.frontend.yml)
 - [Compose de produção](docker-compose.prod.yml)
 - [Comandos do projeto](Makefile)
